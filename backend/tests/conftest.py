@@ -3,6 +3,15 @@
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def isolated_interpretation_cache():
+    """Keep tests independent while allowing repeat requests within a test."""
+    from app.llm.cache import interpretation_cache
+    interpretation_cache.clear()
+    yield
+    interpretation_cache.clear()
+
+
 def pytest_addoption(parser):
     parser.addoption("--live-llm", action="store_true", default=False,
                      help="Run public sample cases against configured real LLM providers")
@@ -21,4 +30,3 @@ def live_llm_environment(request, monkeypatch):
     for key, value in dotenv_values(Path(__file__).parents[1] / ".env").items():
         if value and key not in os.environ:
             monkeypatch.setenv(key, value)
-

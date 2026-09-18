@@ -8,6 +8,8 @@ to the optimizer or compared with its output.
 
 import json
 import math
+import re
+import threading
 from copy import deepcopy
 from pathlib import Path
 
@@ -22,12 +24,15 @@ CASES = json.loads((Path(__file__).parent / "fixtures" / "sample_cases.json").re
 
 class ReplayProvider:
     def __init__(self, directives):
-        self.responses = iter(directives)
+        self.responses = directives
         self.calls = 0
+        self.lock = threading.Lock()
 
     def complete(self, system_prompt, user_prompt):
-        self.calls += 1
-        data = deepcopy(next(self.responses))
+        with self.lock:
+            self.calls += 1
+        index = int(re.search(r"Operator note \(index (\d+)\)", user_prompt).group(1))
+        data = deepcopy(self.responses[index])
         data["note_index"] = 999  # Real interpreter must assign the index.
         data["explanation"] = "Fixture provider response; wording may differ."
         return json.dumps(data)

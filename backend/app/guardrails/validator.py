@@ -56,6 +56,20 @@ def _check_directive(data: dict[str, Any], note_index: int) -> None:
             raise ValueError(f"{numeric_field} is outside its allowed range")
 
 
+def validate_directive(
+    directive: dict[str, Any] | DirectiveInterpretation, note_index: int,
+) -> DirectiveInterpretation:
+    """Strictly validate one candidate, raising on malformed output."""
+    data = directive.model_dump() if isinstance(directive, DirectiveInterpretation) else directive
+    if not isinstance(data, dict):
+        raise ValueError("directive must be an object")
+    _check_directive(data, note_index)
+    result = DirectiveInterpretation.model_validate(data, strict=True)
+    if isinstance(directive, DirectiveInterpretation):
+        result._confidence_metadata = directive._confidence_metadata
+    return result
+
+
 def validate_directive_interpretation(
     directives: list[dict[str, Any] | DirectiveInterpretation],
 ) -> list[DirectiveInterpretation]:
@@ -70,11 +84,7 @@ def validate_directive_interpretation(
     validated = []
     for note_index, directive in enumerate(directives):
         try:
-            data = directive.model_dump() if isinstance(directive, DirectiveInterpretation) else directive
-            if not isinstance(data, dict):
-                raise ValueError("directive must be an object")
-            _check_directive(data, note_index)
-            validated.append(DirectiveInterpretation.model_validate(data, strict=True))
+            validated.append(validate_directive(directive, note_index))
         except (ValueError, TypeError) as exc:
             validated.append(
                 DirectiveInterpretation(

@@ -5,7 +5,9 @@ Mirrors Problem Statement Section 10 (Response Schema) exactly.
 
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
+
+from app.llm.confidence import ConfidenceMetadata
 
 DirectiveType = Literal[
     "solar_reduction",
@@ -27,6 +29,9 @@ def _check_ascending_unique_hours(hours: list[Any]) -> None:
 
 
 class DirectiveInterpretation(BaseModel):
+    # PrivateAttr is excluded from model_dump, JSON, and the OpenAPI schema.
+    _confidence_metadata: ConfidenceMetadata | None = PrivateAttr(default=None)
+
     note_index: int = Field(..., ge=0)
     applies: bool
     directive_type: DirectiveType

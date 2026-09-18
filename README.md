@@ -21,7 +21,10 @@ The complete optimization pipeline is implemented: `POST /optimize-energy` inter
 | Energy schedule optimizer | ✅ PuLP/CBC solver implemented |
 | Directive constraints in optimizer | ✅ All five active directive types implemented |
 | Final schedule verifier | ✅ Implemented |
-| Unit, API, and public sample tests | ✅ 236 offline tests and 10 live sample tests passed |
+| Internal confidence tracking | ✅ Agreement metadata and accept/verify/escalate policy implemented |
+| Interpretation cache | ✅ In-memory TTL/LRU cache with concurrent request deduplication |
+| LLM evaluation and measured defaults | ✅ All 34 candidates reported; 32 benchmarked with available credentials |
+| Unit, API, and public sample tests | ✅ 446 offline tests passed; 10 live sample tests passed in the earlier live run |
 | Deployment / Docker | ⬜ Not started |
 
 ---
@@ -95,7 +98,13 @@ GridWise-Nexus-AI/
 
 The interpreter processes one note at a time, assigns note indices deterministically, retries malformed responses and transient provider failures, and moves through the provider/model chain on quota exhaustion. Unavailable providers or invalid directives fall back to `no_op`, with the reason recorded in the explanation.
 
+JSON handling first requests a native schema-constrained response through OpenAI-compatible `response_format` or Anthropic `output_config.format`. An explicit unsupported-format rejection falls back to text. Text parsing uses `JSONDecoder.raw_decode`, then a string-aware brace/bracket balancing scanner for prose-wrapped output. Multiple JSON values, duplicate keys, incomplete containers, and non-finite numbers are rejected. Parsing or directive-validation failures retry with a repair prompt containing the original scenario context, validation error, and failed output; retries remain bounded. The arbiter uses the same parsing and repair path. Native request formats follow the [OpenAI](https://developers.openai.com/api/docs/guides/structured-outputs) and [Anthropic](https://platform.claude.com/docs/en/build-with-claude/structured-outputs) documentation.
+
 Guardrails check allowed directive types, note-index order, literal boolean `applies` values, integer hours from 0–23 in unique ascending order, required adjustment fields, and numeric bounds. Solar factors must be in `[0, 1]`; reserve and grid-cap values must be finite and non-negative. A `no_op` has `applies=false` and a null adjustment; other directives have `applies=true`.
+
+Interpretations also carry private internal `confidence_score`, `agreement_count`, and `models_used` metadata. A single valid model result scores `0.6` and requests verification by the next distinct provider/model. A strict majority with at least two agreeing models is accepted, with confidence equal to the agreeing fraction of valid votes. Disagreements escalate through further configured models; unresolved disagreements fall back to `no_op`. If only one valid result is available, it remains marked for verification and passes deterministic guardrails. Retries do not count as extra votes. Confidence measures agreement evidence, rather than a calibrated probability of correctness. Metadata is excluded from API responses and OpenAPI, and every schedule still undergoes final verification.
+
+Final guarded interpretations are cached in process memory under a SHA-256 hash of the operator note and canonical directive context: battery configuration, sorted forecast, public provider/model identities, operating date, and prompt/policy version. The cache defaults to a 300-second TTL and 1,024 entries, evicts least-recently-used entries, and shares one in-flight computation for identical concurrent requests. Cached values are deep copies with the caller's note index restored, including private confidence evidence. API keys, provider objects, and raw responses are not stored. Failure or unresolved-disagreement fallbacks are not cached. Set the TTL to `0` to disable caching; each server process has its own cache. Scheduling and final verification still run on every API request.
 
 | Directive | Optimizer behavior during selected hours |
 | --- | --- |
@@ -241,7 +250,7 @@ Run from `backend` with the virtual environment activated:
 python -m pytest -q -p no:cacheprovider
 ```
 
-Latest offline result: **236 passed, 10 live tests skipped**. This includes 30 public sample API checks: each of the 10 cases runs with original inputs, reordered forecasts, and scaled energy/price values. Tests compare directive semantics, independently replay schedule constraints, recalculate totals, and compare cost with the public optimal objective. Reference hourly schedules are never hardcoded or supplied to the solver.
+Latest offline result: **446 passed, 10 live tests skipped**. This includes evaluation scoring and measured default selection, interpretation cache, JSON parsing and repair, confidence policy and API privacy checks, plus 30 public sample API checks: each of the 10 cases runs with original inputs, reordered forecasts, and scaled energy/price values. Tests compare directive semantics, independently replay schedule constraints, recalculate totals, and compare cost with the public optimal objective. Reference hourly schedules are never hardcoded or supplied to the solver.
 
 To test actual note interpretation using configured providers and credentials in `.env`:
 
@@ -250,6 +259,23 @@ python -m pytest -q -p no:cacheprovider tests/test_public_samples.py -k live_llm
 ```
 
 Latest live result: **all 10 public cases passed**, including directive interpretation, schedule validity, and optimal cost. Live runs call external providers and use their quota; offline replay tests do not establish LLM accuracy. See [tests/README.md](backend/tests/README.md) for details.
+
+## LLM evaluation
+
+Run every registered candidate directly against the public operator notes, using credentials from `backend/.env`:
+
+```bash
+cd backend
+python -m scripts.evaluate_llm --workers 8 --timeout 12 --apply-defaults
+```
+
+Use `--samples PATH` for another fixture with the same `cases`, `input`, and `expected_output.directive_interpretation` structure; `--output PATH` sets the JSON report location. The script also writes a Markdown ranking. Omitting `--apply-defaults` only generates reports.
+
+The [ranking report](backend/reports/llm_ranking.md) measures strict JSON validity, directive type, exact hours, numeric values (absolute/relative tolerance `1e-6`), and successful-response latency. Each candidate runs without cache, consensus, retries, repair, or model failover. Native structured output is attempted first; explicit unsupported-format errors permit text fallback. Failed calls count against accuracy, and missing credentials are reported separately. Hours and numeric rates exclude notes where those fields do not apply. Reports store error classes and scores, without credentials or raw model responses.
+
+The completed run covered 10 cases and 18 notes per model: 32 candidates were called, while OpenAI and Anthropic lacked configured credentials. Four models reached 100% accuracy across all requested correctness metrics. ExperimentalLab `gpt-5.6-luna` ranked first with a median response time of about 2.0 seconds. It is the measured primary and fast model; OpenRouter `deepseek/deepseek-v4-flash-0731:free` is the arbiter from another provider. Provider errors, mainly quota limits, reduced other candidates' end-to-end scores. These results describe this public dataset and provider availability during this run; they do not establish hidden-test accuracy.
+
+`--apply-defaults` writes [default_models.json](backend/app/llm/default_models.json). Selection requires complete coverage and at least 90% full semantic and strict JSON accuracy, then ranks accuracy before latency. Runtime role selectors and per-provider defaults read this file; the API tries the measured primary and eligible alternatives before the remaining fallback chain. Explicit model pins/lists retain their ordering. Missing or invalid selection files retain heuristic defaults. The full registry remains available for resilience, and API response fields remain unchanged.
 
 ## Environment Variables
 
@@ -262,6 +288,8 @@ Latest live result: **all 10 public cases passed**, including directive interpre
 | `LLM_MODEL_<NAME>` | Pin a provider to one model when its model list is unset |
 | `LLM_MODEL` | Single-provider model override when no provider-specific override is set |
 | `LLM_API_KEY` | Single-provider fallback key — **never commit real keys** |
+| `INTERPRETATION_CACHE_TTL_SECONDS` | Cache TTL in seconds; default `300`, or `0` to disable |
+| `INTERPRETATION_CACHE_MAX_ENTRIES` | Maximum cached interpretations per process; default `1024` |
 | `PORT` | Example configuration value; pass the desired port explicitly with Uvicorn's `--port` |
 
 `<NAME>` is the uppercase provider name. When no model override is set, the provider's built-in model list is used. Check `GET /llm/status` to inspect the resolved chain without exposing credentials.
