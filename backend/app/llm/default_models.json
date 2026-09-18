@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "provider_models": {
+    "experimentallab": [
+      "gpt-5.6-luna",
+      "deepseek-v4.1-flash",
+      "qwen3.8-27b",
+      "deepseek-v4-flash"
+    ],
+    "openrouter": [
+      "deepseek/deepseek-v4-flash-0731:free"
+    ]
+  },
+  "roles": {
+    "primary": {
+      "provider": "experimentallab",
+      "name": "gpt-5.6-luna",
+      "metrics": {
+        "valid_json_rate": 1.0,
+        "valid_json_count": 18,
+        "recoverable_json_rate": 1.0,
+        "recoverable_json_count": 18,
+        "valid_directive_rate": 1.0,
+        "valid_directive_count": 18,
+        "correct_directive_type_rate": 1.0,
+        "correct_directive_type_count": 18,
+        "correct_hours_rate": 1.0,
+        "correct_hours_count": 14,
+        "correct_numeric_values_rate": 1.0,
+        "correct_numeric_values_count": 9,
+        "fully_correct_rate": 1.0,
+        "fully_correct_count": 18,
+        "median_latency_ms": 2015.3185,
+        "mean_latency_ms": 2022.9766111111112,
+        "error_count": 0
+      }
+    },
+    "fast": {
+      "provider": "experimentallab",
+      "name": "gpt-5.6-luna",
+      "metrics": {
+        "valid_json_rate": 1.0,
+        "valid_json_count": 18,
+        "recoverable_json_rate": 1.0,
+        "recoverable_json_count": 18,
+        "valid_directive_rate": 1.0,
+        "valid_directive_count": 18,
+        "correct_directive_type_rate": 1.0,
+        "correct_directive_type_count": 18,
+        "correct_hours_rate": 1.0,
+        "correct_hours_count": 14,
+        "correct_numeric_values_rate": 1.0,
+        "correct_numeric_values_count": 9,
+        "fully_correct_rate": 1.0,
+        "fully_correct_count": 18,
+        "median_latency_ms": 2015.3185,
+        "mean_latency_ms": 2022.9766111111112,
+        "error_count": 0
+      }
+    },
+    "arbiter": {
+      "provider": "openrouter",
+      "name": "deepseek/deepseek-v4-flash-0731:free",
+      "metrics": {
+        "valid_json_rate": 1.0,
+        "valid_json_count": 18,
+        "recoverable_json_rate": 1.0,
+        "recoverable_json_count": 18,
+        "valid_directive_rate": 1.0,
+        "valid_directive_count": 18,
+        "correct_directive_type_rate": 1.0,
+        "correct_directive_type_count": 18,
+        "correct_hours_rate": 1.0,
+        "correct_hours_count": 14,
+        "correct_numeric_values_rate": 1.0,
+        "correct_numeric_values_count": 9,
+        "fully_correct_rate": 1.0,
+        "fully_correct_count": 18,
+        "median_latency_ms": 9839.8395,
+        "mean_latency_ms": 10065.256166666666,
+        "error_count": 0
+      }
+    }
+  },
+  "generated_at": "2026-09-18T15:10:09.626326+00:00",
+  "dataset_sha256": "32fac014cba2e762338857ded94e2a944b7a5febf3019a8483d90c430bd118fc"
+}

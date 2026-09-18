@@ -3,3 +3,5 @@ uvicorn[standard]
 pydantic
 python-dotenv
 httpx
+pytest
+pulp==3.3.0

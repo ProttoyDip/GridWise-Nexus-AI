@@ -6,7 +6,12 @@ venv/
 
 # Env / secrets
 .env
+*.env
 *.env.local
+
+# Frontend
+node_modules/
+dist/
 
 # Logs
 *.log
@@ -14,3 +19,4 @@ venv/
 # OS / editor
 .DS_Store
 .vscode/
+
