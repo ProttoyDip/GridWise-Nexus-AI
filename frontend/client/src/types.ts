@@ -34,7 +34,15 @@ export type HourlyPlan = {
   solar_used_kwh: number;
   battery_action: "charge" | "discharge" | "idle" | string;
   battery_kwh?: number;
+  battery_energy_after_kwh?: number;
   cost_bdt?: number;
+};
+
+export type SystemStatus = {
+  healthy: boolean;
+  model_availability: { configured: boolean; models: Array<{ provider: string; model: string; circuit_open: boolean }> };
+  optimizer_status: { available: boolean; solver: string };
+  monitoring: Record<string, unknown>;
 };
 
 export type OptimizeResponse = {

@@ -1,10 +1,22 @@
 import { motion } from "framer-motion";
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, Cpu, Github, Loader2, Network, Play, RefreshCw, ShieldCheck, Sparkles, Terminal, Wifi, WifiOff, Zap } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock3, Cpu, LayoutDashboard, Loader2, Network, Play, RadarIcon, RefreshCw, ShieldCheck, Sparkles, Terminal, Zap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { AgentStatusPanel } from "@/components/AgentStatusPanel";
+import { BeforeAfterComparison } from "@/components/BeforeAfterComparison";
+import { DigitalTwinTab } from "@/components/DigitalTwinTab";
+import { ReasoningTimeline } from "@/components/ReasoningTimeline";
 import { ResultsPanel } from "@/components/ResultsPanel";
 import { ScenarioBuilder } from "@/components/ScenarioBuilder";
+import { SystemStatusBar } from "@/components/SystemStatusBar";
+import { WhyAIDecided } from "@/components/WhyAIDecided";
 import type { HourInput, OptimizeResponse, Scenario } from "@/types";
 import samplePack from "@/data/sampleCases.json";
+
+const OPERATOR_PRESETS = [
+  { label: "Solar maintenance", note: "Facilities will wash the rooftop solar panels from noon until 2 PM. Treat usable solar as roughly 25% of forecast during that window." },
+  { label: "Battery protection", note: "For protection testing, the battery must not discharge from 6 PM until 8 PM." },
+  { label: "Peak demand control", note: "From 6 PM until 9 PM, campus grid import must not exceed the feeder's temporary limit." },
+];
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
 
@@ -55,6 +67,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [health, setHealth] = useState<"checking" | "connected" | "disconnected">("checking");
   const [lastHealthCheck, setLastHealthCheck] = useState<Date | null>(null);
+  const [activeTab, setActiveTab] = useState<"dashboard" | "twin">("dashboard");
 
   useEffect(() => {
     let cancelled = false;
@@ -82,6 +95,12 @@ export default function Home() {
 
   const loadSampleCase = (caseId: string) => {
     setScenario(cloneSampleCase(caseId));
+    setResult(null);
+    setError(null);
+  };
+
+  const applyPreset = (note: string) => {
+    setScenario((current) => ({ ...current, operator_notes: [note, ...current.operator_notes.slice(1)] }));
     setResult(null);
     setError(null);
   };
@@ -138,14 +157,53 @@ export default function Home() {
         <div className="hero-health"><div className="health-orbit"><div className="orbit-ring ring-one" /><div className="orbit-ring ring-two" /><div className="orbit-core"><Cpu size={21} /></div></div><div><span>Model interface</span><strong>{health === "connected" ? "Ready for inference" : health === "checking" ? "Checking signal" : "Offline mode"}</strong><small>{lastHealthCheck ? `Last checked ${lastHealthCheck.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Polling every 6 sec"}</small></div></div>
       </section>
 
-      <div className="workspace-grid">
-        <div className="builder-column"><ScenarioBuilder scenario={scenario} onChange={setScenario} onRandomize={() => { setScenario(randomizedFromPack()); setResult(null); setError(null); }} onLoadJson={loadJson} onLoadSampleCase={loadSampleCase} sampleJson={sampleJson} /></div>
-        <div className="results-column"><ResultsPanel result={result} loading={loading} /></div>
+      <SystemStatusBar apiBase={API_BASE} />
+
+      <div className="tab-strip">
+        <button type="button" className={`tab-button ${activeTab === "dashboard" ? "is-active" : ""}`} onClick={() => setActiveTab("dashboard")}><LayoutDashboard size={14} /> Operator Dashboard</button>
+        <button type="button" className={`tab-button ${activeTab === "twin" ? "is-active" : ""}`} onClick={() => setActiveTab("twin")}><RadarIcon size={14} /> Digital Twin</button>
       </div>
 
-      <div className="submit-bar glass-card"><div className="submit-context"><div className="submit-icon"><ShieldCheck size={18} /></div><div><strong>Ready to run <span>{scenario.scenario_id}</span></strong><small>POST /optimize-energy · {scenario.hours.length} hourly intervals · {scenario.operator_notes.length} operator directives</small></div></div><button className="button button-primary submit-button" type="button" onClick={handleSubmit} disabled={loading}>{loading ? <><Loader2 size={17} className="spin" /> Optimizing…</> : <><Play size={15} fill="currentColor" /> Run optimization <ArrowRight size={16} /></>}</button></div>
+      {activeTab === "twin" ? (
+        <DigitalTwinTab apiBase={API_BASE} scenario={scenario} />
+      ) : (
+        <>
+          <section className="glass-card command-center">
+            <div className="panel-heading compact-heading">
+              <div><div className="eyebrow"><span className="eyebrow-dot" /> Operator command center</div><h2>Set the operating intent</h2><p>Pick a common directive or write your own in the scenario builder below — the AI interprets it against real constraints.</p></div>
+            </div>
+            <div className="command-presets">
+              {OPERATOR_PRESETS.map((preset) => (
+                <button key={preset.label} type="button" className="command-preset" onClick={() => applyPreset(preset.note)}>
+                  <span className="command-preset-label">{preset.label}</span>
+                  <span className="command-preset-note">{preset.note}</span>
+                </button>
+              ))}
+            </div>
+          </section>
 
-      {error && <motion.div className="error-panel" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}><div className="error-icon"><AlertTriangle size={17} /></div><div><strong>Optimization request needs attention</strong><p>{error}</p></div><button type="button" className="icon-button" onClick={() => setError(null)} aria-label="Dismiss error">×</button></motion.div>}
+          {loading && <div className="glass-card reasoning-panel"><div className="eyebrow"><span className="eyebrow-dot" /> AI reasoning</div><ReasoningTimeline active={loading} /></div>}
+
+          <div className="workspace-grid">
+            <div className="builder-column"><ScenarioBuilder scenario={scenario} onChange={setScenario} onRandomize={() => { setScenario(randomizedFromPack()); setResult(null); setError(null); }} onLoadJson={loadJson} onLoadSampleCase={loadSampleCase} sampleJson={sampleJson} /></div>
+            <div className="results-column"><ResultsPanel result={result} loading={loading} battery={scenario.battery} /></div>
+          </div>
+
+          <div className="submit-bar glass-card"><div className="submit-context"><div className="submit-icon"><ShieldCheck size={18} /></div><div><strong>Ready to run <span>{scenario.scenario_id}</span></strong><small>POST /optimize-energy · {scenario.hours.length} hourly intervals · {scenario.operator_notes.length} operator directives</small></div></div><button className="button button-primary submit-button" type="button" onClick={handleSubmit} disabled={loading}>{loading ? <><Loader2 size={17} className="spin" /> Optimizing…</> : <><Play size={15} fill="currentColor" /> Run optimization <ArrowRight size={16} /></>}</button></div>
+
+          {error && <motion.div className="error-panel" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}><div className="error-icon"><AlertTriangle size={17} /></div><div><strong>Optimization request needs attention</strong><p>{error}</p></div><button type="button" className="icon-button" onClick={() => setError(null)} aria-label="Dismiss error">×</button></motion.div>}
+
+          {result && !loading && (
+            <div className="insight-grid">
+              <div className="insight-col">
+                <BeforeAfterComparison apiBase={API_BASE} scenario={scenario} result={result} />
+                <WhyAIDecided result={result} />
+              </div>
+              <AgentStatusPanel loading={loading} hasResult={Boolean(result)} hasError={Boolean(error)} />
+            </div>
+          )}
+        </>
+      )}
 
       <footer className="footer"><span><Sparkles size={13} /> Built for high-signal energy operations</span><span><Clock3 size={13} /> Session autosaves locally</span><span><Terminal size={13} /> v0.9.4-beta</span></footer>
     </main>
