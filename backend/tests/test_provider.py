@@ -53,7 +53,8 @@ def test_unconfigured_model_expands_to_curated_free_list(monkeypatch):
     # LLM_MODEL intentionally unset: should expand to the full default list
 
     chain = get_provider_chain()
-    default_models = _PROVIDER_REGISTRY["openrouter"][1]
+    from app.llm.measured_defaults import ordered_models
+    default_models = ordered_models("openrouter", _PROVIDER_REGISTRY["openrouter"][1])
     assert len(chain) == len(default_models)
     assert [provider.model for _, provider in chain] == default_models
     assert all(name == "openrouter" for name, _ in chain)

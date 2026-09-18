@@ -42,17 +42,40 @@ class LLMProviderError(Exception):
     """Raised whenever a provider cannot produce a completion."""
 
 
+class StructuredOutputUnsupported(LLMProviderError):
+    """Explicit capability rejection; safe to retry with ordinary text."""
+
+
 class LLMQuotaExceededError(LLMProviderError):
     """Raised when a provider reports rate-limit/quota exhaustion (HTTP 429
     or an equivalent "insufficient credits" style error). Distinct from
-    other provider errors so callers can fail over to the next configured
-    provider instead of retrying a provider that is out of tokens."""
+    other provider errors so callers can apply a 429-specific retry
+    strategy (exponential backoff) instead of treating it like any other
+    failure."""
+
+
+class LLMTimeoutError(LLMProviderError):
+    """Raised when a request to a provider times out (connect, read,
+    write, or pool timeout). Distinct from other provider errors so
+    callers can skip straight to the next model rather than retrying a
+    provider that is already slow/hanging."""
+
+
+class LLMServerError(LLMProviderError):
+    """Raised when a provider returns an HTTP 5xx (server-side) error.
+    Distinct from other 4xx errors, which are typically permanent
+    configuration problems a retry cannot fix; a 5xx is more often a
+    transient upstream blip worth a short retry."""
 
 
 class LLMProvider(ABC):
     """Abstract chat-completion provider: system+user text in, raw text out."""
 
     model: str
+    supports_structured_output = False
+
+    def complete_structured(self, system_prompt: str, user_prompt: str, schema: dict) -> str | dict:
+        raise StructuredOutputUnsupported("Provider does not support native structured output")
 
     @abstractmethod
     def complete(self, system_prompt: str, user_prompt: str) -> str:
@@ -76,11 +99,21 @@ def _looks_like_quota_error(status_code: int, body_text: str) -> bool:
     return any(keyword in lowered for keyword in _QUOTA_KEYWORDS)
 
 
+def _structured_output_unsupported(status_code: int, text: str) -> bool:
+    lowered = text.lower()
+    if any(term in lowered for term in ("invalid schema", "schema validation", "unsupported schema", "unsupported keyword")):
+        return False
+    return status_code in (400, 422) and any(
+        term in lowered for term in ("response_format", "json_schema", "json schema", "output_config", "structured output")
+    ) and any(term in lowered for term in ("not supported", "unsupported", "does not support", "unknown parameter"))
+
+
 class AnthropicProvider(LLMProvider):
     """Anthropic's native Messages API (not OpenAI-compatible)."""
 
     API_URL = "https://api.anthropic.com/v1/messages"
     ANTHROPIC_VERSION = "2023-06-01"
+    supports_structured_output = True
 
     def __init__(self, api_key: str, model: str, timeout: float = DEFAULT_TIMEOUT_SECONDS) -> None:
         self._api_key = api_key
@@ -88,6 +121,16 @@ class AnthropicProvider(LLMProvider):
         self._timeout = timeout
 
     def complete(self, system_prompt: str, user_prompt: str) -> str:
+        return self._complete(system_prompt, user_prompt)
+
+    def complete_structured(self, system_prompt: str, user_prompt: str, schema: dict) -> str:
+        return self._complete(system_prompt, user_prompt, schema)
+
+    def _complete(self, system_prompt: str, user_prompt: str, schema: dict | None = None) -> str:
+        payload = {"model": self.model, "max_tokens": 1024, "system": system_prompt,
+                   "messages": [{"role": "user", "content": user_prompt}]}
+        if schema is not None:
+            payload["output_config"] = {"format": {"type": "json_schema", "schema": schema}}
         try:
             response = httpx.post(
                 self.API_URL,
@@ -96,12 +139,7 @@ class AnthropicProvider(LLMProvider):
                     "anthropic-version": self.ANTHROPIC_VERSION,
                     "content-type": "application/json",
                 },
-                json={
-                    "model": self.model,
-                    "max_tokens": 1024,
-                    "system": system_prompt,
-                    "messages": [{"role": "user", "content": user_prompt}],
-                },
+                json=payload,
                 timeout=self._timeout,
             )
             response.raise_for_status()
@@ -110,10 +148,17 @@ class AnthropicProvider(LLMProvider):
                 block.get("text", "") for block in body.get("content", []) if block.get("type") == "text"
             )
         except httpx.HTTPStatusError as exc:
+            status_code = exc.response.status_code
             text = exc.response.text[:500]
-            if _looks_like_quota_error(exc.response.status_code, text):
+            if schema is not None and _structured_output_unsupported(status_code, text):
+                raise StructuredOutputUnsupported(text) from exc
+            if _looks_like_quota_error(status_code, text):
                 raise LLMQuotaExceededError(f"Anthropic API quota/rate-limit hit: {text}") from exc
-            raise LLMProviderError(f"Anthropic API returned {exc.response.status_code}: {text}") from exc
+            if 500 <= status_code <= 599:
+                raise LLMServerError(f"Anthropic API returned {status_code}: {text}") from exc
+            raise LLMProviderError(f"Anthropic API returned {status_code}: {text}") from exc
+        except httpx.TimeoutException as exc:
+            raise LLMTimeoutError(f"Anthropic API request timed out: {exc}") from exc
         except httpx.HTTPError as exc:
             raise LLMProviderError(f"Anthropic API request failed: {exc}") from exc
         except (KeyError, ValueError, TypeError) as exc:
@@ -124,6 +169,8 @@ class OpenAICompatibleProvider(LLMProvider):
     """Any provider exposing an OpenAI-style POST {base_url}/chat/completions
     endpoint with Bearer auth — covers OpenAI itself, OpenRouter, NaraRouter,
     ExperimentalLab, and similar routers/aggregators."""
+
+    supports_structured_output = True
 
     def __init__(
         self,
@@ -138,6 +185,20 @@ class OpenAICompatibleProvider(LLMProvider):
         self._timeout = timeout
 
     def complete(self, system_prompt: str, user_prompt: str) -> str:
+        return self._complete(system_prompt, user_prompt)
+
+    def complete_structured(self, system_prompt: str, user_prompt: str, schema: dict) -> str:
+        return self._complete(system_prompt, user_prompt, schema)
+
+    def _complete(self, system_prompt: str, user_prompt: str, schema: dict | None = None) -> str:
+        payload = {"model": self.model, "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ], "temperature": 0}
+        if schema is not None:
+            payload["response_format"] = {"type": "json_schema", "json_schema": {
+                "name": "operator_directive", "strict": True, "schema": schema,
+            }}
         try:
             response = httpx.post(
                 self._url,
@@ -145,24 +206,24 @@ class OpenAICompatibleProvider(LLMProvider):
                     "Authorization": f"Bearer {self._api_key}",
                     "Content-Type": "application/json",
                 },
-                json={
-                    "model": self.model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "temperature": 0,
-                },
+                json=payload,
                 timeout=self._timeout,
             )
             response.raise_for_status()
             body = response.json()
             return body["choices"][0]["message"]["content"]
         except httpx.HTTPStatusError as exc:
+            status_code = exc.response.status_code
             text = exc.response.text[:500]
-            if _looks_like_quota_error(exc.response.status_code, text):
+            if schema is not None and _structured_output_unsupported(status_code, text):
+                raise StructuredOutputUnsupported(text) from exc
+            if _looks_like_quota_error(status_code, text):
                 raise LLMQuotaExceededError(f"{self._url} quota/rate-limit hit: {text}") from exc
-            raise LLMProviderError(f"{self._url} returned {exc.response.status_code}: {text}") from exc
+            if 500 <= status_code <= 599:
+                raise LLMServerError(f"{self._url} returned {status_code}: {text}") from exc
+            raise LLMProviderError(f"{self._url} returned {status_code}: {text}") from exc
+        except httpx.TimeoutException as exc:
+            raise LLMTimeoutError(f"{self._url} request timed out: {exc}") from exc
         except httpx.HTTPError as exc:
             raise LLMProviderError(f"{self._url} request failed: {exc}") from exc
         except (KeyError, IndexError, ValueError, TypeError) as exc:
@@ -276,7 +337,9 @@ def _resolve_models_for_provider(name: str, single_provider: bool) -> list[str]:
     if explicit_single:
         return [explicit_single]
 
-    return list(_PROVIDER_REGISTRY[name][1])
+    from app.llm.measured_defaults import ordered_models
+
+    return ordered_models(name, _PROVIDER_REGISTRY[name][1])
 
 
 def get_provider_chain() -> list[tuple[str, LLMProvider]]:
