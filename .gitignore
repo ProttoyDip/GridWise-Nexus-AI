@@ -8,7 +8,12 @@ backend/.pytest_tmp/
 
 # Env / secrets
 .env
+*.env
 *.env.local
+
+# Frontend
+node_modules/
+dist/
 
 # Logs
 *.log
@@ -18,7 +23,6 @@ backend/.pytest_tmp/
 .vscode/
 
 # Local verification artifacts and runtime feedback
-.pytest_cache/
 .pytest_tmp/
 .test-energy-twin-*/
 directive-memory-runtime.json

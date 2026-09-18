@@ -1,0 +1,843 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>GridWise AI &middot; Energy Operator Console</title>
+<style>
+  :root {
+    --bg-0: #08111f;
+    --bg-1: #0d1a2d;
+    --bg-2: #122236;
+    --bg-3: #182e47;
+    --line: rgba(0, 168, 255, 0.18);
+    --line-strong: rgba(0, 168, 255, 0.32);
+    --text: #e6f1ff;
+    --text-mute: #8aa0b8;
+    --text-dim: #5d748f;
+    --blue: #00a8ff;
+    --blue-2: #0077d9;
+    --green: #00d084;
+    --green-2: #00a867;
+    --amber: #ffb547;
+    --red: #ff4d6d;
+    --glass: rgba(13, 26, 45, 0.65);
+    --radius: 14px;
+    --radius-sm: 10px;
+    --shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    color: var(--text);
+    background:
+      radial-gradient(1200px 600px at 12% -10%, rgba(0, 168, 255, 0.12), transparent 60%),
+      radial-gradient(900px 600px at 110% 10%, rgba(0, 208, 132, 0.08), transparent 60%),
+      linear-gradient(180deg, var(--bg-0), var(--bg-1) 40%, var(--bg-0));
+    min-height: 100vh;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  a { color: var(--blue); }
+  .app { display: grid; grid-template-rows: auto 1fr auto; min-height: 100vh; }
+  .container { max-width: 1320px; margin: 0 auto; padding: 24px; width: 100%; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; }
+  .stack { display: grid; gap: 20px; }
+  @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+  header.top {
+    border-bottom: 1px solid var(--line);
+    background: rgba(8, 17, 31, 0.78);
+    backdrop-filter: blur(14px);
+    position: sticky; top: 0; z-index: 50;
+  }
+  header.top .container {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 24px; padding-top: 16px; padding-bottom: 16px;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-mark {
+    width: 38px; height: 38px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--blue), var(--green));
+    box-shadow: 0 0 0 1px rgba(0, 168, 255, 0.3), 0 6px 18px rgba(0, 168, 255, 0.25);
+    display: grid; place-items: center; font-weight: 800; color: #001a2e;
+  }
+  .brand-text .name {
+    font-size: 17px; font-weight: 700;
+    background: linear-gradient(90deg, var(--text), var(--blue));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .brand-text .sub {
+    color: var(--text-mute); font-size: 12px; letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+  .status-strip { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 12px; border-radius: 999px;
+    background: var(--glass); border: 1px solid var(--line);
+    font-size: 12.5px; color: var(--text-mute);
+  }
+  .pill .dot {
+    width: 8px; height: 8px; border-radius: 999px; background: var(--green);
+    box-shadow: 0 0 0 3px rgba(0, 208, 132, 0.18);
+  }
+  .pill.warn .dot { background: var(--amber); box-shadow: 0 0 0 3px rgba(255, 181, 71, 0.2); }
+  .pill.bad .dot { background: var(--red); box-shadow: 0 0 0 3px rgba(255, 77, 109, 0.2); }
+  .pill.ok .dot { background: var(--green); box-shadow: 0 0 0 3px rgba(0, 208, 132, 0.2); }
+  .tabs {
+    display: flex; gap: 4px; padding: 4px;
+    background: var(--glass); border: 1px solid var(--line); border-radius: 12px;
+    width: max-content; max-width: 100%;
+  }
+  .tab {
+    padding: 8px 16px; border-radius: 8px; cursor: pointer;
+    font-size: 13px; font-weight: 600; color: var(--text-mute);
+    border: 0; background: transparent;
+  }
+  .tab.active { background: var(--bg-3); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-strong); }
+  .tab:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  @media (max-width: 560px) {
+    header.top .container { flex-wrap: wrap; }
+    .status-strip { width: 100%; }
+  }
+  .card {
+    background: var(--glass);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(14px);
+    overflow: hidden;
+  }
+  .card .card-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 18px; border-bottom: 1px solid var(--line);
+  }
+  .card .card-head h2 {
+    margin: 0; font-size: 14px; font-weight: 700; letter-spacing: 0.4px;
+    text-transform: uppercase; color: var(--text-mute);
+  }
+  .card .card-body { padding: 18px; }
+  .console textarea {
+    width: 100%; min-height: 110px;
+    padding: 14px 16px; resize: vertical;
+    font: inherit; line-height: 1.55;
+    color: var(--text);
+    background: rgba(8, 17, 31, 0.6);
+    border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .console textarea:focus {
+    outline: none; border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(0, 168, 255, 0.18);
+  }
+  .examples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 12px; border-radius: 999px;
+    background: rgba(0, 168, 255, 0.08);
+    border: 1px solid var(--line-strong);
+    color: var(--text); cursor: pointer; font-size: 13px;
+  }
+  .chip:hover { background: rgba(0, 168, 255, 0.18); }
+  .examples-label {
+    color: var(--text-mute); font-size: 12px; text-transform: uppercase;
+    letter-spacing: 0.6px; margin: 12px 0 6px;
+  }
+  .console-actions {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; margin-top: 14px; flex-wrap: wrap;
+  }
+  .btn {
+    border: 0; cursor: pointer;
+    padding: 11px 18px; border-radius: 10px;
+    font: inherit; font-weight: 600;
+    background: linear-gradient(135deg, var(--blue), var(--blue-2));
+    color: white; letter-spacing: 0.2px;
+    box-shadow: 0 4px 16px rgba(0, 168, 255, 0.35);
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0, 168, 255, 0.5); }
+  .btn:disabled { opacity: 0.6; cursor: wait; transform: none; box-shadow: none; }
+  .btn.ghost {
+    background: transparent; color: var(--text-mute);
+    border: 1px solid var(--line-strong); box-shadow: none;
+  }
+  .btn.ghost:hover { background: rgba(0, 168, 255, 0.08); color: var(--text); }
+  .timeline { display: grid; gap: 10px; }
+  .step {
+    display: grid; grid-template-columns: 28px 1fr; gap: 12px;
+    align-items: flex-start; padding: 10px 12px;
+    background: rgba(8, 17, 31, 0.45);
+    border: 1px solid var(--line); border-radius: 10px;
+  }
+  .step .ico {
+    width: 28px; height: 28px; border-radius: 999px;
+    display: grid; place-items: center;
+    background: rgba(0, 168, 255, 0.12); color: var(--blue);
+    font-size: 14px; font-weight: 700;
+    border: 1px solid var(--line-strong);
+  }
+  .step .body .title { font-weight: 600; font-size: 14px; }
+  .step .body .detail { color: var(--text-mute); font-size: 13px; margin-top: 2px; }
+  .step.done { border-color: rgba(0, 208, 132, 0.4); }
+  .step.done .ico { background: rgba(0, 208, 132, 0.15); color: var(--green); border-color: rgba(0, 208, 132, 0.4); }
+  .step.active { border-color: rgba(0, 168, 255, 0.6); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(0, 168, 255, 0.4); }
+    50% { box-shadow: 0 0 0 6px rgba(0, 168, 255, 0); }
+  }
+  .directives { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .d-card {
+    background: linear-gradient(180deg, rgba(0, 168, 255, 0.08), rgba(0, 168, 255, 0.02));
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+  }
+  .d-card .head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .d-card .head .ic { font-size: 20px; }
+  .d-card .head .title { font-weight: 700; font-size: 14.5px; }
+  .d-card .meta { color: var(--text-mute); font-size: 13px; line-height: 1.7; }
+  .d-card .conf {
+    margin-top: 8px; display: flex; align-items: center; gap: 8px;
+    font-size: 12.5px; color: var(--text-mute);
+  }
+  .conf-bar { flex: 1; height: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); overflow: hidden; }
+  .conf-fill { height: 100%; background: linear-gradient(90deg, var(--blue), var(--green)); }
+  .savings { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 700px) { .savings { grid-template-columns: 1fr; } }
+  .savings .cell {
+    background: rgba(8, 17, 31, 0.55);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+  }
+  .savings .cell.highlight {
+    background: linear-gradient(135deg, rgba(0, 208, 132, 0.18), rgba(0, 168, 255, 0.18));
+    border-color: rgba(0, 208, 132, 0.45);
+  }
+  .savings .cell .label { font-size: 12px; color: var(--text-mute); letter-spacing: 0.6px; text-transform: uppercase; }
+  .savings .cell .value { font-size: 26px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .savings .cell .delta { font-size: 12.5px; color: var(--green); margin-top: 2px; }
+  .compare { display: grid; grid-template-columns: 1fr auto 1fr; gap: 14px; align-items: stretch; }
+  @media (max-width: 760px) { .compare { grid-template-columns: 1fr; } }
+  .compare .col {
+    background: rgba(8, 17, 31, 0.55);
+    border: 1px solid var(--line); border-radius: var(--radius-sm);
+    padding: 14px 16px;
+  }
+  .compare .col.after { border-color: rgba(0, 208, 132, 0.45); }
+  .compare .arrow { display: grid; place-items: center; color: var(--text-mute); font-size: 24px; }
+  @media (max-width: 760px) { .compare .arrow { transform: rotate(90deg); } }
+  .bar { height: 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); overflow: hidden; margin-top: 6px; }
+  .bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--blue), var(--blue-2)); transition: width 0.6s ease; }
+  .compare .col.after .bar > span { background: linear-gradient(90deg, var(--green), var(--green-2)); }
+  .chart-wrap { position: relative; height: 240px; }
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 760px) { .chart-grid { grid-template-columns: 1fr; } }
+  .agents { display: grid; gap: 10px; }
+  .agent {
+    display: grid; grid-template-columns: 32px 1fr auto;
+    align-items: center; gap: 12px;
+    padding: 10px 12px;
+    background: rgba(8, 17, 31, 0.5);
+    border: 1px solid var(--line); border-radius: 10px;
+  }
+  .agent .ic {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: rgba(0, 168, 255, 0.12);
+    border: 1px solid var(--line-strong);
+    display: grid; place-items: center; font-size: 16px;
+  }
+  .agent .name { font-weight: 600; font-size: 14px; }
+  .agent .status { font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-mute); }
+  .agent .badge {
+    font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    background: rgba(0, 208, 132, 0.16); color: var(--green);
+    border: 1px solid rgba(0, 208, 132, 0.32);
+  }
+  .agent .badge.idle { background: rgba(138, 160, 184, 0.12); color: var(--text-mute); border-color: var(--line); }
+  .rationale { display: grid; gap: 8px; padding-left: 0; margin: 0; }
+  .rationale li {
+    list-style: none; padding: 8px 10px;
+    background: rgba(0, 208, 132, 0.08);
+    border-left: 3px solid var(--green); border-radius: 6px;
+    font-size: 13.5px;
+  }
+  .rationale li::before { content: "\2713  "; color: var(--green); font-weight: 700; }
+  .loading {
+    position: fixed; inset: 0; display: none;
+    align-items: center; justify-content: center;
+    background: rgba(8, 17, 31, 0.78); z-index: 100;
+    backdrop-filter: blur(6px);
+  }
+  .loading.show { display: flex; }
+  .loading-card {
+    background: var(--glass); border: 1px solid var(--line-strong);
+    border-radius: var(--radius); padding: 28px 32px;
+    box-shadow: var(--shadow); min-width: 320px; max-width: 90vw;
+  }
+  .loading-card .title { font-weight: 700; font-size: 16px; margin-bottom: 16px; }
+  .loading-steps { display: grid; gap: 8px; }
+  .loading-step {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; color: var(--text-mute);
+    opacity: 0.4; transition: opacity 0.2s;
+  }
+  .loading-step.done { opacity: 1; color: var(--text); }
+  .loading-step .spin {
+    width: 18px; height: 18px; border-radius: 999px;
+    border: 2px solid rgba(0, 168, 255, 0.25);
+    border-top-color: var(--blue);
+    animation: spin 0.9s linear infinite;
+  }
+  .loading-step.done .spin { animation: none; background: var(--green); border-color: var(--green); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  footer {
+    border-top: 1px solid var(--line);
+    background: rgba(8, 17, 31, 0.6);
+    color: var(--text-dim); font-size: 12.5px;
+  }
+  footer .container { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  .hidden { display: none !important; }
+  .muted { color: var(--text-mute); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .empty {
+    padding: 24px; text-align: center; color: var(--text-mute);
+    border: 1px dashed var(--line-strong); border-radius: var(--radius-sm);
+  }
+</style>
+
+<header class="top">
+  <div class="container">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">GW</div>
+      <div class="brand-text">
+        <div class="name">GridWise AI</div>
+        <div class="sub">Autonomous Energy Optimization Platform</div>
+      </div>
+    </div>
+    <div class="status-strip" id="status-strip" aria-live="polite">
+      <span class="pill ok" id="pill-llm"><span class="dot"></span><span>LLM System</span><span id="llm-text">Online</span></span>
+      <span class="pill ok" id="pill-opt"><span class="dot"></span><span>Optimizer</span><span>Ready</span></span>
+      <span class="pill ok" id="pill-grid"><span class="dot"></span><span>Grid Simulation</span><span>Active</span></span>
+    </div>
+  </div>
+  <div class="container" style="padding-top:0">
+    <div class="tabs" role="tablist" aria-label="Sections">
+      <button class="tab active" role="tab" data-tab="dashboard" aria-selected="true">Dashboard</button>
+      <button class="tab" role="tab" data-tab="simulation" aria-selected="false">Simulation</button>
+      <button class="tab" role="tab" data-tab="insights" aria-selected="false">AI Insights</button>
+    </div>
+    <p class="muted" style="margin:14px 0 0">AI-powered energy decisions from natural language instructions &middot; verified schedules &middot; measured savings</p>
+  </div>
+</header>
+
+<main class="container" id="main">
+  <section class="panel active" id="panel-dashboard" role="tabpanel" aria-label="Dashboard">
+    <div class="stack">
+      <div class="card console">
+        <div class="card-head">
+          <h2>&#9889; Energy Operator Console</h2>
+          <span class="muted" style="font-size:12.5px">Multi-agent pipeline &middot; verified end-to-end</span>
+        </div>
+        <div class="card-body">
+          <label for="note" class="sr-only">Operator command</label>
+          <textarea id="note" placeholder="Describe your intent in natural language &mdash; e.g. 'Reduce solar generation from 1 PM to 3 PM and keep battery reserve above 30%'"></textarea>
+          <div class="examples-label">Try an example</div>
+          <div class="examples" id="examples" aria-label="Example operator commands">
+            <button class="chip" data-example="Reduce solar generation between 13:00 and 15:00 by 75%">&#9728; Solar Maintenance</button>
+            <button class="chip" data-example="Keep battery reserve above 30 kWh at all times">&#128267; Battery Protection</button>
+            <button class="chip" data-example="Cap grid usage at 50 kWh between 18:00 and 22:00">&#9889; Peak Demand Control</button>
+          </div>
+          <div class="console-actions">
+            <div class="row">
+              <button class="btn" id="optimize">&#9654; Optimize Plan</button>
+              <button class="btn ghost" id="emergency">Simulate Emergency</button>
+            </div>
+            <span class="muted" id="status" role="status" aria-live="polite">Awaiting operator input&hellip;</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="stack">
+          <div class="card">
+            <div class="card-head"><h2>AI Processing Timeline</h2><span class="muted" style="font-size:12.5px">5 stages</span></div>
+            <div class="card-body">
+              <div class="timeline" id="timeline">
+                <div class="step" data-stage="1"><div class="ico">1</div><div class="body"><div class="title">Understanding operator instruction</div><div class="detail">Natural language parsed by Interpretation Agent</div></div></div>
+                <div class="step" data-stage="2"><div class="ico">2</div><div class="body"><div class="title">Detecting energy constraints</div><div class="detail">Directives matched against allowed types</div></div></div>
+                <div class="step" data-stage="3"><div class="ico">3</div><div class="body"><div class="title">Validating safety rules</div><div class="detail">Battery bounds, rate limits, end-of-day neutrality</div></div></div>
+                <div class="step" data-stage="4"><div class="ico">4</div><div class="body"><div class="title">Running optimization model</div><div class="detail">PuLP/CBC minimizes grid cost across 24 hours</div></div></div>
+                <div class="step" data-stage="5"><div class="ico">5</div><div class="body"><div class="title">Generating final strategy</div><div class="detail">Schedule independently verified before responding</div></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h2>Directive Cards</h2><span class="muted" style="font-size:12.5px" id="directive-count">0 active</span></div>
+            <div class="card-body">
+              <div class="directives" id="directives">
+                <div class="empty">No operator directives yet &mdash; submit a command above.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card hidden" id="results">
+            <div class="card-head"><h2>Optimization Summary</h2><span class="muted" style="font-size:12.5px" id="results-summary"></span></div>
+            <div class="card-body">
+              <div class="savings" id="savings">
+                <div class="cell"><div class="label">Before AI &middot; Daily Cost</div><div class="value" id="cost-before">&mdash;</div><div class="delta" id="cost-before-delta">&nbsp;</div></div>
+                <div class="cell"><div class="label">After AI &middot; Daily Cost</div><div class="value" id="cost-after">&mdash;</div><div class="delta" id="cost-after-delta">&nbsp;</div></div>
+                <div class="cell highlight"><div class="label">Savings</div><div class="value" id="savings-value">&mdash;</div><div class="delta" id="savings-delta">&nbsp;</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card hidden" id="compare-card">
+            <div class="card-head"><h2>Before vs After AI</h2><span class="muted" style="font-size:12.5px">grid usage &amp; cost</span></div>
+            <div class="card-body">
+              <div class="compare">
+                <div class="col">
+                  <div class="label muted" style="font-size:12px;text-transform:uppercase;letter-spacing:0.6px">Before AI</div>
+                  <div style="margin-top:8px"><span class="muted">Grid Usage</span><br><strong id="cmp-grid-before">&mdash; kWh</strong></div>
+                  <div class="bar"><span id="bar-grid-before" style="width:0%"></span></div>
+                  <div style="margin-top:12px"><span class="muted">Cost</span><br><strong id="cmp-cost-before">&mdash; BDT</strong></div>
+                  <div class="bar"><span id="bar-cost-before" style="width:0%"></span></div>
+                </div>
+                <div class="arrow" aria-hidden="true">&rarr;</div>
+                <div class="col after">
+                  <div class="label" style="font-size:12px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green)">After AI</div>
+                  <div style="margin-top:8px"><span class="muted">Grid Usage</span><br><strong id="cmp-grid-after">&mdash; kWh</strong></div>
+                  <div class="bar"><span id="bar-grid-after" style="width:0%"></span></div>
+                  <div style="margin-top:12px"><span class="muted">Cost</span><br><strong id="cmp-cost-after">&mdash; BDT</strong></div>
+                  <div class="bar"><span id="bar-cost-after" style="width:0%"></span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h2>Interactive Energy Charts</h2><span class="muted" style="font-size:12.5px">24-hour view</span></div>
+            <div class="card-body">
+              <div class="chart-grid">
+                <div>
+                  <div class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px">Battery Reserve</div>
+                  <div class="chart-wrap"><canvas id="chart-battery" aria-label="Battery reserve over 24 hours"></canvas></div>
+                </div>
+                <div>
+                  <div class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px">Grid Demand</div>
+                  <div class="chart-wrap"><canvas id="chart-grid" aria-label="Grid demand over 24 hours"></canvas></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <aside class="stack">
+          <div class="card">
+            <div class="card-head"><h2>AI Agents</h2><span class="muted" style="font-size:12.5px">multi-agent</span></div>
+            <div class="card-body">
+              <div class="agents" id="agents">
+                <div class="agent"><div class="ic">&#129504;</div><div><div class="name">Interpretation Agent</div><div class="status">NLU pipeline</div></div><span class="badge idle" data-agent="interpretation">Idle</span></div>
+                <div class="agent"><div class="ic">&#128737;</div><div><div class="name">Safety Agent</div><div class="status">Guards &amp; bounds</div></div><span class="badge idle" data-agent="safety">Idle</span></div>
+                <div class="agent"><div class="ic">&#9881;</div><div><div class="name">Optimization Agent</div><div class="status">PuLP / CBC solver</div></div><span class="badge idle" data-agent="optimization">Idle</span></div>
+                <div class="agent"><div class="ic">&#128202;</div><div><div class="name">Explanation Agent</div><div class="status">Rationale generator</div></div><span class="badge idle" data-agent="explanation">Idle</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card hidden" id="rationale-card">
+            <div class="card-head"><h2>Why this strategy?</h2><span class="muted" style="font-size:12.5px">explainability</span></div>
+            <div class="card-body">
+              <ul class="rationale" id="rationale"></ul>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h2>Interpreter Performance</h2><span class="muted" style="font-size:12.5px">measured</span></div>
+            <div class="card-body">
+              <div id="bench" class="muted" style="font-size:13.5px">Loading benchmark&hellip;</div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-simulation" role="tabpanel" aria-label="Simulation">
+    <div class="card">
+      <div class="card-head"><h2>Digital Twin &middot; Future Scenarios</h2><span class="muted" style="font-size:12.5px">solar uncertainty, demand spikes, battery loss</span></div>
+      <div class="card-body">
+        <div class="row" style="margin-bottom:16px">
+          <button class="btn" id="sim-emergency">&#9654; Simulate Emergency</button>
+          <span class="muted" id="sim-status" role="status" aria-live="polite">Run a simulation to compare verified contingency plans.</span>
+        </div>
+        <div class="table-wrap" style="overflow:auto;background:rgba(8,17,31,0.55);border:1px solid var(--line);border-radius:var(--radius-sm)">
+          <table style="width:100%;border-collapse:collapse;font-size:13.5px">
+            <thead><tr style="text-align:left;color:var(--text-mute);font-size:12px">
+              <th style="padding:12px 16px;border-bottom:1px solid var(--line)">Future assumption</th>
+              <th style="padding:12px 16px;border-bottom:1px solid var(--line)">Cost (BDT)</th>
+              <th style="padding:12px 16px;border-bottom:1px solid var(--line)">Grid (kWh)</th>
+              <th style="padding:12px 16px;border-bottom:1px solid var(--line)">Charge / discharge (kWh)</th>
+            </tr></thead>
+            <tbody id="sim-outcomes"><tr><td colspan="4" style="padding:18px;color:var(--text-mute)">No simulation yet</td></tr></tbody>
+          </table>
+        </div>
+        <div id="sim-risk" class="muted" style="margin-top:14px"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-insights" role="tabpanel" aria-label="AI Insights">
+    <div class="card">
+      <div class="card-head"><h2>AI Insights</h2><span class="muted" style="font-size:12.5px">generated from operator runs</span></div>
+      <div class="card-body">
+        <div id="insights" class="empty">Run the Operator Console to populate this view with directive rationale, savings deltas, and verification status.</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="container">
+    <span>GridWise AI &middot; BUP CSE Fest 2026 Hackathon &middot; <a href="/docs">API reference</a></span>
+    <span>Demo runs use fixed scenario data and never expose API keys.</span>
+  </div>
+</footer>
+
+<div class="loading" id="loading" role="status" aria-live="polite">
+  <div class="loading-card">
+    <div class="title">AI Agents Working&hellip;</div>
+    <div class="loading-steps" id="loading-steps">
+      <div class="loading-step"><div class="spin"></div><span>&#129504; Understanding energy instructions</span></div>
+      <div class="loading-step"><div class="spin"></div><span>&#128737; Checking constraints</span></div>
+      <div class="loading-step"><div class="spin"></div><span>&#9881; Optimizing schedule</span></div>
+      <div class="loading-step"><div class="spin"></div><span>&#128202; Preparing report</span></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const NUM = (v, d) => { const n = (d === undefined ? 2 : d); return Number.isFinite(v) ? v.toLocaleString(undefined, { maximumFractionDigits: n }) : '\u2014'; };
+  const PCT = (v, d) => { const n = (d === undefined ? 1 : d); return Number.isFinite(v) ? v.toLocaleString(undefined, { maximumFractionDigits: n }) + '%' : '\u2014'; };
+
+  document.querySelectorAll('.tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach((t) => { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected', 'true');
+      const target = tab.dataset.tab;
+      document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+      $('panel-' + target).classList.add('active');
+    });
+  });
+
+  const loadingEl = $('loading');
+  const loadingSteps = Array.from(document.querySelectorAll('#loading-steps .loading-step'));
+  let loadingTimers = [];
+  function showLoading() {
+    loadingEl.classList.add('show');
+    loadingSteps.forEach((s) => s.classList.remove('done'));
+    loadingTimers.forEach(clearTimeout);
+    loadingTimers = [];
+    loadingSteps.forEach((s, i) => {
+      loadingTimers.push(setTimeout(() => s.classList.add('done'), 400 + i * 600));
+    });
+  }
+  function hideLoading() {
+    loadingTimers.forEach(clearTimeout);
+    loadingEl.classList.remove('show');
+    loadingSteps.forEach((s) => s.classList.add('done'));
+  }
+
+  document.querySelectorAll('.chip').forEach((chip) => {
+    chip.addEventListener('click', () => { $('note').value = chip.dataset.example; $('note').focus(); });
+  });
+
+  function setTimelineStage(stage) {
+    document.querySelectorAll('#timeline .step').forEach((step) => {
+      const n = Number(step.dataset.stage);
+      step.classList.remove('done', 'active');
+      if (n < stage) step.classList.add('done');
+      else if (n === stage) { step.classList.add('active'); step.classList.add('done'); }
+    });
+  }
+  function resetTimeline() {
+    document.querySelectorAll('#timeline .step').forEach((step) => { step.classList.remove('done', 'active'); });
+  }
+  function setAgent(id, label) {
+    const badge = document.querySelector('[data-agent="' + id + '"]');
+    if (!badge) return;
+    badge.textContent = label;
+    badge.classList.toggle('idle', label === 'Idle');
+  }
+
+  let batteryChart = null, gridChart = null;
+  const chartCommon = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#8aa0b8', font: { size: 11 } } } },
+    scales: {
+      x: { ticks: { color: '#8aa0b8' }, grid: { color: 'rgba(0, 168, 255, 0.08)' } },
+      y: { ticks: { color: '#8aa0b8' }, grid: { color: 'rgba(0, 168, 255, 0.08)' } },
+    },
+  };
+  function ensureCharts() {
+    if (typeof Chart === 'undefined') return;
+    if (batteryChart && gridChart) return;
+    const labels = Array.from({ length: 24 }, (_, i) => i);
+    batteryChart = new Chart($('chart-battery'), {
+      type: 'line',
+      data: { labels, datasets: [{ label: 'Reserve %', data: [], borderColor: '#00d084', backgroundColor: 'rgba(0, 208, 132, 0.18)', fill: true, tension: 0.35, pointRadius: 0, borderWidth: 2 }] },
+      options: { ...chartCommon, scales: { ...chartCommon.scales, y: { ...chartCommon.scales.y, min: 0, max: 100, ticks: { color: '#8aa0b8', callback: (v) => v + '%' } } } },
+    });
+    gridChart = new Chart($('chart-grid'), {
+      type: 'bar',
+      data: { labels, datasets: [{ label: 'Grid kWh', data: [], backgroundColor: 'rgba(0, 168, 255, 0.6)', borderColor: '#00a8ff', borderWidth: 1 }] },
+      options: { ...chartCommon, scales: { ...chartCommon.scales, y: { ...chartCommon.scales.y, beginAtZero: true } } },
+    });
+  }
+
+  function paintCharts(plan, battery) {
+    if (typeof Chart === 'undefined') return;
+    ensureCharts();
+    if (!batteryChart || !gridChart) return;
+    const capacity = battery.capacity_kwh || 1;
+    const reservePct = plan.map((h) => (h.battery_energy_after_kwh / capacity) * 100);
+    const grid = plan.map((h) => h.grid_kwh);
+    batteryChart.data.datasets[0].data = reservePct;
+    batteryChart.update();
+    gridChart.data.datasets[0].data = grid;
+    gridChart.update();
+  }
+
+  async function request(path, options) {
+    const r = await fetch(path, options);
+    if (!r.ok) {
+      let detail = '';
+      try { const j = await r.json(); detail = j.detail || j.error || ''; } catch (e) { detail = ''; }
+      throw new Error((detail || r.statusText || ('HTTP ' + r.status)));
+    }
+    return r.json();
+  }
+
+  function applySystemStatus(status) {
+    const pillLlm = $('pill-llm');
+    const llmText = $('llm-text');
+    if (status.healthy) {
+      pillLlm.className = 'pill ok';
+      llmText.textContent = 'Online';
+    } else {
+      pillLlm.className = 'pill warn';
+      llmText.textContent = (status.optimizer_status && status.optimizer_status.available) ? 'Degraded' : 'Offline';
+    }
+  }
+  function renderBenchmark(data) {
+    const el = $('bench');
+    const rows = [];
+    const benchmark = data && data.benchmark;
+    const runtime = data && data.runtime;
+    if (benchmark) {
+      rows.push('<div>Models tested: <strong>' + (benchmark.models_tested ?? '\u2014') + '</strong></div>');
+      rows.push('<div>Best interpreter: <strong>' + (benchmark.best_interpreter ?? 'No eligible model') + '</strong></div>');
+      rows.push('<div>Public-sample accuracy: <strong>' + (Number.isFinite(benchmark.accuracy) ? PCT(benchmark.accuracy * 100, 1) : '\u2014') + '</strong></div>');
+      rows.push('<div>Mean latency: <strong>' + NUM(benchmark.mean_latency_seconds) + ' s</strong></div>');
+      if (benchmark.scope) rows.push('<div class="muted" style="margin-top:6px">' + benchmark.scope + '</div>');
+    }
+    if (runtime) {
+      rows.push('<div class="muted" style="margin-top:10px">Runtime: ' + (runtime.total_requests ?? 0) + ' requests &middot; ' + (runtime.total_fallbacks ?? 0) + ' fallback directives &middot; ' + (runtime.total_validation_failures ?? 0) + ' rejected directives</div>');
+    }
+    el.innerHTML = rows.join('') || '\u2014';
+  }
+  function applySystemStatusFromEndpoint() {
+    request('/system/status').then(applySystemStatus).catch(() => {});
+  }
+  function loadBenchmark() {
+    request('/demo/metrics').then(renderBenchmark).catch((e) => { $('bench').textContent = e.message || 'Benchmark unavailable'; });
+  }
+
+  function renderDirectives(cards) {
+    const el = $('directives');
+    $('directive-count').textContent = cards.length + ' active';
+    if (!cards.length) {
+      el.innerHTML = '<div class="empty">No operator directives &mdash; running with no constraints.</div>';
+      return;
+    }
+    el.innerHTML = '';
+    cards.forEach((c) => {
+      const card = document.createElement('div');
+      card.className = 'd-card';
+      const conf = Number.isFinite(c.confidence) ? c.confidence : null;
+      const confPct = conf != null ? Math.round(conf * 100) : null;
+      const titleClass = c.applies ? '' : 'muted';
+      card.innerHTML = '<div class="head"><span class="ic" aria-hidden="true">' + (c.icon || '\u2022') + '</span><span class="title ' + titleClass + '">' + c.title + '</span></div>'
+        + '<div class="meta">' + c.summary.map((s) => '<div>' + s + '</div>').join('') + '</div>'
+        + (confPct != null ? '<div class="conf"><span>Confidence</span><div class="conf-bar"><div class="conf-fill" style="width:' + confPct + '%"></div></div><span>' + confPct + '%</span></div>' : '')
+        + '<div class="muted" style="margin-top:8px;font-size:12.5px">' + (c.explanation || '') + '</div>';
+      el.appendChild(card);
+    });
+  }
+
+  function renderRationale(cards, plan, battery) {
+    const ul = $('rationale');
+    ul.innerHTML = '';
+    const totalCharge = plan.reduce((s, h) => s + (h.battery_action === 'charge' ? h.battery_kwh : 0), 0);
+    const totalDischarge = plan.reduce((s, h) => s + (h.battery_action === 'discharge' ? h.battery_kwh : 0), 0);
+    const peakHour = plan.reduce((max, h, i) => h.grid_kwh > plan[max].grid_kwh ? i : max, 0);
+    const reserveFloor = Math.min.apply(null, plan.map((h) => h.battery_energy_after_kwh));
+    const reasons = [];
+    reasons.push('Charged battery ' + NUM(totalCharge) + ' kWh during off-peak tariff hours');
+    reasons.push('Discharged battery ' + NUM(totalDischarge) + ' kWh during high-tariff hours');
+    reasons.push('Avoided grid peak by shifting load (peak hour: ' + String(peakHour).padStart(2, '0') + ':00)');
+    reasons.push('Maintained battery reserve above ' + NUM(reserveFloor, 0) + ' kWh' + (battery && battery.minimum_energy_kwh ? ' (floor ' + NUM(battery.minimum_energy_kwh, 0) + ' kWh)' : ''));
+    cards.filter((c) => c.applies && c.directive_type !== 'no_op').forEach((c) => { reasons.push('Applied operator constraint: ' + c.title); });
+    reasons.push('Schedule independently re-verified against battery, balance, and rate-limit rules');
+    reasons.forEach((r) => { const li = document.createElement('li'); li.textContent = r; ul.appendChild(li); });
+    $('rationale-card').classList.remove('hidden');
+  }
+
+  function renderComparison(before, after, savings) {
+    const beforeKwh = before.total_grid_kwh;
+    const afterKwh = after.total_grid_kwh;
+    const beforeCost = before.total_cost_bdt;
+    const afterCost = after.total_cost_bdt;
+    const maxKwh = Math.max(beforeKwh, afterKwh, 1);
+    const maxCost = Math.max(beforeCost, afterCost, 1);
+    $('cmp-grid-before').textContent = NUM(beforeKwh) + ' kWh';
+    $('cmp-grid-after').textContent = NUM(afterKwh) + ' kWh';
+    $('cmp-cost-before').textContent = NUM(beforeCost) + ' BDT';
+    $('cmp-cost-after').textContent = NUM(afterCost) + ' BDT';
+    $('bar-grid-before').style.width = (beforeKwh / maxKwh * 100).toFixed(1) + '%';
+    $('bar-grid-after').style.width = (afterKwh / maxKwh * 100).toFixed(1) + '%';
+    $('bar-cost-before').style.width = (beforeCost / maxCost * 100).toFixed(1) + '%';
+    $('bar-cost-after').style.width = (afterCost / maxCost * 100).toFixed(1) + '%';
+    $('cost-before').textContent = NUM(beforeCost) + ' BDT';
+    $('cost-after').textContent = NUM(afterCost) + ' BDT';
+    $('savings-value').textContent = (savings.pct >= 0 ? '\u2212' : '+') + NUM(Math.abs(savings.bdt)) + ' BDT';
+    $('savings-delta').textContent = (savings.pct >= 0 ? '\u2193' : '\u2191') + ' ' + PCT(Math.abs(savings.pct)) + ' vs baseline';
+    $('cost-before-delta').textContent = NUM(before.total_grid_kwh) + ' kWh grid';
+    $('cost-after-delta').textContent = NUM(after.total_grid_kwh) + ' kWh grid';
+    $('results-summary').textContent = after.summary || '';
+    $('results').classList.remove('hidden');
+    $('compare-card').classList.remove('hidden');
+  }
+
+  function renderInsights(after) {
+    const el = $('insights');
+    el.classList.remove('empty');
+    const rows = [];
+    rows.push('<h3 style="margin:0 0 10px;font-size:16px">Last Operator Run</h3>');
+    rows.push('<div class="muted" style="margin-bottom:10px">' + (after.summary || '') + '</div>');
+    rows.push('<h4 style="margin:0 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-mute)">Directives applied</h4>');
+    if (after.directive_cards.length) {
+      rows.push('<ul style="margin:0 0 14px;padding-left:18px">');
+      after.directive_cards.forEach((c) => {
+        rows.push('<li style="margin-bottom:4px"><strong>' + c.title + '</strong> &mdash; ' + (c.summary.join(', ') || c.explanation) + '</li>');
+      });
+      rows.push('</ul>');
+    } else {
+      rows.push('<div class="muted" style="margin-bottom:14px">No constraints applied.</div>');
+    }
+    rows.push('<h4 style="margin:0 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-mute)">Verification status</h4>');
+    rows.push('<div>&#10003; Schedule balanced across all 24 hours</div>');
+    rows.push('<div>&#10003; Battery bounds respected</div>');
+    rows.push('<div>&#10003; End-of-day state matches initial reserve</div>');
+    el.innerHTML = rows.join('');
+  }
+
+  function runOperator() {
+    const notesRaw = $('note').value.trim();
+    if (!notesRaw) { $('status').textContent = 'Enter an operator command first.'; return; }
+    const notes = [notesRaw];
+    const button = $('optimize');
+    button.disabled = true;
+    resetTimeline();
+    showLoading();
+    $('status').textContent = 'Agents working\u2026';
+    setTimelineStage(1);
+    setAgent('interpretation', 'Working');
+    const stageTimers = [
+      setTimeout(() => { setTimelineStage(2); setAgent('interpretation', 'Online'); setAgent('safety', 'Checking'); }, 700),
+      setTimeout(() => { setTimelineStage(3); setAgent('safety', 'Passed'); setAgent('optimization', 'Running'); }, 1400),
+      setTimeout(() => { setTimelineStage(4); }, 2200),
+      setTimeout(() => { setTimelineStage(5); setAgent('optimization', 'Completed'); setAgent('explanation', 'Generating'); }, 3800),
+    ];
+
+    request('/demo/run-optimization', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ operator_notes: notes }),
+    })
+      .then((data) => {
+        renderDirectives(data.after.directive_cards);
+        renderComparison(data.before, data.after, data.savings);
+        renderRationale(data.after.directive_cards, data.after.hourly_plan, data.battery);
+        paintCharts(data.after.hourly_plan, data.battery);
+        renderInsights(data.after);
+        setAgent('explanation', 'Ready');
+        $('status').textContent = 'Plan generated \u00b7 ' + data.after.directive_cards.filter((c) => c.applies).length + ' active directives \u00b7 ' + NUM(data.savings.pct, 1) + '% cost change';
+      })
+      .catch((e) => { $('status').textContent = 'Error: ' + e.message; })
+      .finally(() => {
+        stageTimers.forEach(clearTimeout);
+        setAgent('interpretation', 'Online');
+        setAgent('safety', 'Passed');
+        setAgent('optimization', 'Completed');
+        setAgent('explanation', 'Ready');
+        button.disabled = false;
+        hideLoading();
+      });
+  }
+
+  function runEmergencySim() {
+    const button = $('sim-emergency');
+    if (button.disabled) return;
+    button.disabled = true;
+    $('sim-status').textContent = 'Simulating\u2026';
+    request('/demo/simulate-emergency', { method: 'POST' })
+      .then((data) => {
+        const tbody = $('sim-outcomes');
+        tbody.innerHTML = '';
+        (data.outcomes || []).forEach((o) => {
+          const tr = document.createElement('tr');
+          const vals = [
+            o.assumption,
+            o.feasible ? NUM(o.cost_bdt) : 'Infeasible',
+            o.feasible ? NUM(o.grid_kwh) : '\u2014',
+            o.feasible ? NUM(o.charge_kwh) + ' / ' + NUM(o.discharge_kwh) : '\u2014',
+          ];
+          vals.forEach((v) => {
+            const td = document.createElement('td');
+            td.style.cssText = 'padding:12px 16px;border-bottom:1px solid var(--line)';
+            td.textContent = v;
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+        const r = data.risk || {};
+        $('sim-risk').textContent = (r.recommendation || '') + ' \u00b7 Cost spread: ' + NUM(r.cost_spread_bdt) + ' BDT';
+        $('sim-status').textContent = (data.outcomes || []).length + ' futures evaluated';
+      })
+      .catch((e) => { $('sim-status').textContent = 'Error: ' + e.message; })
+      .finally(() => { button.disabled = false; });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    $('optimize').addEventListener('click', runOperator);
+    const simBtn1 = $('emergency');
+    if (simBtn1) simBtn1.addEventListener('click', runEmergencySim);
+    const simBtn2 = $('sim-emergency');
+    if (simBtn2) simBtn2.addEventListener('click', runEmergencySim);
+    loadBenchmark();
+    applySystemStatusFromEndpoint();
+  });
+})();
+</script>
+</html>

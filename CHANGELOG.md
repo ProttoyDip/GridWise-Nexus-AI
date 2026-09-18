@@ -14,6 +14,58 @@ branched from `NewFeature`. Documents the currently implemented
 architecture, what already works end-to-end, and what is staged but not
 yet wired in.
 
+### Added — Demo UI overhaul (control-room dashboard)
+
+`GET /demo` (opt-in via `GRIDWISE_ENABLE_DEMO=1`) has been rebuilt from a
+plain JSON-output developer page into a control-room dashboard. The
+backend now also exposes a real end-to-end optimization endpoint so the
+UI can render an honest before/after delta driven by the live
+`/optimize-energy` pipeline.
+
+- **`POST /demo/run-optimization`** (`app/demo/routes.py`). Accepts
+  `{"operator_notes": [str, ...]}` (1–3 notes), then runs the operator's
+  scenario and a parallel baseline scenario (no constraints) through
+  `optimize_energy`, returning both plans plus a `savings` block
+  (`bdt`, `pct`, `grid_kwh`). Failures in either run surface as
+  `HTTP 500` with a descriptive detail.
+- **`_directive_card()` helper**. Projects each `DirectiveInterpretation`
+  into a UI-shaped dict with icon (☀ / 🔋 / ⛔ / ⚡ / •), human-readable
+  title, hour-window and reduction/cap summary lines, confidence score,
+  and the explanation string.
+- **`backend/app/demo/index.html` rewritten** (~43 KB, single file, no
+  build step). Adopts a dark-navy / electric-blue / green glassmorphism
+  theme and replaces the old JSON output with:
+  - Sticky header with brand mark and three live status pills
+    (LLM / Optimizer / Grid Simulation), fed by `GET /system/status`.
+  - **Dashboard / Simulation / AI Insights** tab strip.
+  - **Operator Console** card: textarea + three example chips
+    (Solar Maintenance, Battery Protection, Peak Demand Control) that
+    pre-fill the field on click.
+  - **AI Processing Timeline** with 5 animated stages
+    (Understanding → Detecting → Validating → Running → Generating).
+  - **Directive Cards** grid with icon, hour window, summary, and a
+    gradient confidence bar.
+  - **Optimization Summary** with three highlighted savings cells
+    (Before / After / Savings) and a delta vs baseline.
+  - **Before vs After AI** comparison card with animated gradient
+    bars for grid usage and cost.
+  - **Interactive Energy Charts** powered by Chart.js 4.4.1 — battery
+    reserve % (line) and grid demand (bar) over 24 hours.
+  - **AI Agents** side panel (Interpretation / Safety / Optimization /
+    Explanation) with live "Working / Passed / Completed / Ready"
+    badges that flip through the timeline.
+  - **Why this strategy?** rationale card that derives 6–7 verification
+    reasons from the actual plan (charge / discharge totals, peak hour,
+    reserve floor, applied directives, re-verification status).
+  - **Loading overlay** with progressive agent steps.
+  - Mobile-responsive collapse points at 980px, 760px, and 700px so the
+    two-column grid, comparison arrow, and savings cells reflow cleanly.
+- The **Simulation** tab keeps the original "Simulate Emergency"
+  behaviour (`POST /demo/simulate-emergency`) and re-skins the results
+  table.
+- The **AI Insights** tab is populated after the first operator run with
+  the directive list, plan summary, and verification status.
+
 ### Added — Risk-based adaptive verification
 
 `POST /optimize-energy` now scales its LLM verification effort to the
