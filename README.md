@@ -1,20 +1,21 @@
 # GridWise Nexus AI
 
-**An LLM-assisted campus energy optimization agent** — built for the BUP CSE Fest 2026 Hackathon (Online Preliminary), in association with Poridhi.
+**An LLM-assisted campus energy optimization platform** — built for the BUP CSE Fest 2026 Hackathon (Online Preliminary), in association with Poridhi.
 
-GridWise interprets natural-language operator notes (e.g. *"Solar output will drop to about 20% from 1 PM to 3 PM"*), converts them into structured, machine-checkable directives, validates them deterministically, and produces a cost-minimizing 24-hour campus energy schedule that respects every applicable constraint.
+GridWise interprets natural-language operator notes (e.g. *"Solar output will drop to about 20% from 1 PM to 3 PM"*), converts them into structured, machine-checkable directives, validates them deterministically, and produces a cost-minimizing 24-hour campus energy schedule that respects every applicable constraint. A React operator dashboard, a conversational AI Copilot, and a digital-twin what-if simulator sit on top of the same verified pipeline — none of them re-implement or bypass it.
 
 ---
 
 ## Status
 
-The complete optimization pipeline is implemented: `POST /optimize-energy` interprets operator notes, validates the directives, solves a 24-hour energy schedule with PuLP/CBC, and independently verifies the schedule before returning it. All 10 public sample cases passed with live LLM providers. Docker packaging and deployment remain pending.
+The complete optimization pipeline is implemented and deployed: `POST /optimize-energy` interprets operator notes, validates the directives, solves a 24-hour energy schedule with PuLP/CBC, and independently verifies the schedule before returning it. All 10 public sample cases passed with live LLM providers. The backend is containerized and live on Render; a React operator dashboard and an AI Energy Copilot chat layer are implemented and deployed alongside it.
 
 | Component | Status |
 | --- | --- |
 | `GET /health` | ✅ Implemented |
 | `POST /optimize-energy` — request/response schema & validation | ✅ Implemented |
 | `GET /llm/status` — configured providers and models | ✅ Implemented |
+| `GET /system/status` — provider health, circuit-breaker state, optimizer availability | ✅ Implemented |
 | `POST /optimize-energy` — complete pipeline | ✅ Implemented |
 | LLM operator-note interpreter | ✅ Implemented |
 | Deterministic guardrails | ✅ Implemented |
@@ -25,11 +26,16 @@ The complete optimization pipeline is implemented: `POST /optimize-energy` inter
 | Internal confidence tracking | ✅ Agreement metadata and accept/verify/escalate policy implemented |
 | Interpretation cache | ✅ In-memory TTL/LRU cache with concurrent request deduplication |
 | Optimization result cache | ✅ Verified hourly plans and cost cached with TTL and safe failure fallback |
+| Per-provider/model circuit breaker | ✅ Implemented, wired into interpreter and consensus chain walks |
+| Per-note request deadline | ✅ Bounds worst-case cascading-fallback latency |
 | LLM evaluation and measured defaults | ✅ All 34 candidates reported; 32 benchmarked with available credentials |
 | Prompt evaluation | ✅ Three versioned prompts, public-sample scoring and ranking report |
 | Judge simulator | ✅ Independent API, interpretation, physics, cost and optimum checks |
-| Unit, API, and public sample tests | ✅ 740 offline tests passed; 10 live sample tests passed in the earlier live run |
-| Deployment / Docker | ⬜ Not started |
+| Unit, API, and public sample tests | ✅ 830 offline tests collected (includes Copilot); 10 live sample tests passed in the earlier live run |
+| Docker packaging | ✅ Non-root image, build-time CBC solver self-check |
+| Deployment (backend) | ✅ Live on Render (Docker web service) |
+| React operator dashboard | ✅ Implemented and deployed — scenario builder, results panel, digital twin tab |
+| AI Energy Copilot (`POST /copilot/chat`) | ✅ Implemented and deployed — floating chat assistant over the existing pipeline |
 
 ---
 
@@ -72,29 +78,66 @@ Operator notes are natural language and are never trusted directly as math. They
 GridWise-Nexus-AI/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py            # FastAPI app entrypoint, router registration
+│   │   ├── main.py             # FastAPI app entrypoint, router registration
 │   │   ├── api/
-│   │   │   ├── health.py      # GET /health
-│   │   │   ├── llm_status.py  # GET /llm/status
-│   │   │   └── optimize.py    # POST /optimize-energy (complete pipeline)
+│   │   │   ├── health.py       # GET /health
+│   │   │   ├── llm_status.py   # GET /llm/status
+│   │   │   ├── system_status.py# GET /system/status (providers, breaker, optimizer)
+│   │   │   ├── optimize.py     # POST /optimize-energy (complete pipeline)
+│   │   │   └── copilot.py      # POST /copilot/chat (conversational layer)
 │   │   ├── models/
-│   │   │   ├── request.py     # Request schema + validation (Pydantic)
-│   │   │   └── response.py    # Response schema (Pydantic)
+│   │   │   ├── request.py      # Request schema + validation (Pydantic)
+│   │   │   └── response.py     # Response schema (Pydantic)
 │   │   ├── llm/
-│   │   │   ├── provider.py    # Provider/model chain and quota failover
-│   │   │   ├── prompts.py     # Operator-note prompt templates
-│   │   │   └── interpreter.py # JSON parsing, retries, and safe fallback
+│   │   │   ├── provider.py     # Provider/model chain and quota failover
+│   │   │   ├── prompts.py      # Operator-note prompt templates
+│   │   │   ├── interpreter.py  # JSON parsing, retries, and safe fallback
+│   │   │   ├── circuit_breaker.py # Per-provider/model failure tracking
+│   │   │   └── consensus.py    # Multi-model agreement / confidence voting
 │   │   ├── guardrails/
-│   │   │   └── validator.py   # Deterministic directive validation
+│   │   │   └── validator.py    # Deterministic directive validation
 │   │   ├── optimizer/
-│   │   │   ├── scheduler.py   # Scenario scheduling entrypoint
-│   │   │   ├── directives.py  # apply_directives() adds hourly constraints
-│   │   │   └── solver.py      # PuLP/CBC cost minimization
-│   │   └── verifier/
-│   │       └── schedule_checker.py # Independent replay and totals checks
-│   ├── tests/                 # Unit/API tests and public sample fixtures
+│   │   │   ├── scheduler.py    # Scenario scheduling entrypoint
+│   │   │   ├── directives.py   # apply_directives() adds hourly constraints
+│   │   │   └── solver.py       # PuLP/CBC cost minimization
+│   │   ├── verifier/
+│   │   │   └── schedule_checker.py # Independent replay and totals checks
+│   │   ├── explainability/
+│   │   │   └── generator.py    # "Why AI decided this" — never alters the schedule
+│   │   ├── simulation/
+│   │   │   ├── scenario_generator.py # Bounded what-if uncertainty factors
+│   │   │   └── simulator.py    # Digital-twin stress test against the verified plan
+│   │   ├── copilot/            # Conversational layer — wraps existing services only
+│   │   │   ├── intent_router.py       # Deterministic regex intent classification
+│   │   │   ├── tool_manager.py        # Calls optimizer/explainability/simulation directly
+│   │   │   ├── conversation_memory.py # In-memory per-session TTL memory
+│   │   │   ├── response_generator.py  # Formats real results into chat replies
+│   │   │   └── copilot_agent.py       # Orchestrates the turn end to end
+│   │   ├── monitoring/
+│   │   │   └── logger.py       # Structural, secret-safe aggregate counters
+│   │   └── demo/                # Optional standalone control-room demo (flag-gated)
+│   ├── tests/                  # Unit/API tests and public sample fixtures
+│   ├── Dockerfile              # Non-root image, build-time CBC self-check
 │   ├── requirements.txt
 │   └── .env.example
+├── frontend/
+│   ├── client/src/
+│   │   ├── pages/Home.tsx       # Operator dashboard (tabs, status bar, workspace)
+│   │   ├── components/
+│   │   │   ├── ScenarioBuilder.tsx      # Scenario editor + public sample pack loader
+│   │   │   ├── ResultsPanel.tsx         # Directive cards, dispatch + battery SoC charts
+│   │   │   ├── SystemStatusBar.tsx      # LLM / optimizer / simulation indicators
+│   │   │   ├── ReasoningTimeline.tsx    # AI reasoning steps during optimization
+│   │   │   ├── BeforeAfterComparison.tsx# Baseline vs. operator-directed comparison
+│   │   │   ├── WhyAIDecided.tsx         # Explainability panel from the real response
+│   │   │   ├── AgentStatusPanel.tsx     # Pipeline stage status, driven by real state
+│   │   │   ├── DigitalTwinTab.tsx       # What-if simulation via /copilot/chat
+│   │   │   └── copilot/                 # Floating AI Energy Copilot chat widget
+│   │   └── data/sampleCases.json  # Copy of the public sample pack used by the UI
+│   ├── render.yaml / Dockerfile   # Static-site build (npm run build → dist/public)
+│   └── package.json
+├── render.yaml                 # Backend web service blueprint
+├── DEPLOYMENT.md
 └── README.md
 ```
 
@@ -164,6 +207,24 @@ Additive, judge-schema-safe endpoint reporting which LLM provider(s)/model(s) ar
 }
 ```
 
+### `GET /system/status`
+
+Additive, judge-schema-safe endpoint used by the dashboard's system status bar. Reports circuit-breaker state per provider/model, CBC solver availability, and aggregate monitoring counters — never API keys or raw model responses:
+
+```json
+{
+  "healthy": true,
+  "model_availability": {
+    "configured": true,
+    "models": [
+      { "provider": "openrouter", "model": "openai/gpt-4o-mini", "circuit_open": false, "failure_count": 0 }
+    ]
+  },
+  "optimizer_status": { "available": true, "solver": "CBC" },
+  "monitoring": { "...": "aggregate counters only" }
+}
+```
+
 ### `POST /optimize-energy`
 
 Accepts a 24-hour energy scenario plus 1–3 operator notes; returns the interpreted directives and the optimized 24-hour schedule.
@@ -224,6 +285,33 @@ Malformed or invalid requests return `422` with a detailed field-level error bod
 
 Optimization failures, including infeasible directive combinations, return `422`. Schedule verification failures return `500` with an error detail instead of an hourly plan. `GET /health` checks service availability; it does not establish LLM provider availability.
 
+### `POST /copilot/chat`
+
+Conversational layer for the dashboard's floating AI Energy Copilot. It performs no optimization, interpretation, or simulation of its own — a deterministic regex-based intent router (not an LLM call, for speed and reproducibility) classifies each message into one of five intents and dispatches to the matching existing GridWise service:
+
+| Intent | Backing call |
+| --- | --- |
+| `OPTIMIZATION_REQUEST` | `POST /optimize-energy` pipeline |
+| `EXPLANATION_REQUEST` | `app/explainability/generator.py` against the session's last verified result |
+| `SIMULATION_REQUEST` | `app/simulation/simulator.py` (digital twin) |
+| `STATUS_REQUEST` | `GET /system/status` |
+| `GENERAL_ENERGY_QUERY` | Static FAQ answers — no model call |
+
+```jsonc
+// Request
+{ "session_id": "abc-123", "message": "Why did the battery discharge at 6 PM?", "context": null }
+
+// Response
+{
+  "reply": "...",
+  "intent": "EXPLANATION_REQUEST",
+  "action_taken": "explain_schedule",
+  "visual_data": { "kind": "explanation", "why_this_strategy": ["..."] }
+}
+```
+
+Session memory is in-process, bounded, and TTL-expired (matching the pattern used by the interpretation and optimization caches) — no database, and nothing is persisted across server restarts. `context` may carry the dashboard's current `{scenario_id, hours, battery}` so a follow-up question is answered against the operator's actual scenario rather than a fixed illustrative one. The system prompt documenting the Copilot's contract is never returned to the client; only `{reply, intent, action_taken, visual_data}` cross the API boundary.
+
 ## Getting Started
 
 **Prerequisites:** Python 3.11+
@@ -259,6 +347,20 @@ curl -X POST http://127.0.0.1:8000/optimize-energy \
 ```
 
 Interactive API docs are available at `http://127.0.0.1:8000/docs` while the server is running.
+
+### Frontend (operator dashboard)
+
+**Prerequisites:** Node.js 20+
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Set `VITE_API_BASE_URL` (e.g. in `frontend/.env.local`) to point at a running backend; it defaults to `http://localhost:8000`. The dashboard defaults to the real 10-case public sample pack (`frontend/client/src/data/sampleCases.json`, a copy of `backend/tests/fixtures/sample_cases.json`) rather than synthetic data — pick a case from the "Public sample pack" dropdown in the scenario builder, or write your own.
+
+Build for production with `npm run build` (outputs to `frontend/dist/public`); this is what the deployed Render static site runs.
 
 ## Tests
 
@@ -367,15 +469,33 @@ cd backend
 
 Demo routes are disabled by default and excluded from OpenAPI. Competition request and response schemas remain unchanged. Runtime memory and internal decisions are not shared across workers or replicas.
 
+## Frontend Dashboard
+
+The React operator console (`frontend/`) is a control-room view over the same verified pipeline — it adds no optimization logic of its own; every number it shows traces back to `/optimize-energy`, `/system/status`, or `/copilot/chat`.
+
+- **System status bar** — three live indicators (LLM system, optimizer, grid simulation) polled from `GET /system/status`.
+- **Operator Command Center** — one-click preset directives (solar maintenance, battery protection, peak demand control) above the full scenario builder.
+- **Public sample pack** — the dashboard loads real cases from `backend/tests/fixtures/sample_cases.json` by default, not synthetic demo data; "Randomize" perturbs a real case rather than generating one from scratch.
+- **AI reasoning timeline** — a step-by-step indicator shown while an optimization is running.
+- **Results panel** — directive cards with formatted `structured_adjustment` fields (no raw JSON), a grid/solar/battery-action dispatch chart, and a battery state-of-charge chart with a minimum-reserve reference line.
+- **Before vs. after comparison** — runs a second `/optimize-energy` call with directives cleared, on demand (a manual "Compare against baseline" button — it doesn't run automatically, since it doubles LLM + solver cost per click).
+- **"Why AI decided this"** — plan summary, applied-directive explanations, and real battery-usage stats computed from the actual response.
+- **AI agent status panel** — pipeline-stage indicators (interpreter, safety validator, optimizer, explainability) driven by real loading/result/error state, not fabricated.
+- **Digital Twin tab** — what-if stress-testing (e.g. "what if solar drops by 50%?") run through the real simulator via `/copilot/chat`.
+- **AI Energy Copilot** — a floating chat assistant (bottom-right on every page) that answers questions about the current scenario using the same five intents documented under `POST /copilot/chat` above, with visual response cards instead of raw JSON, a per-session conversation history persisted in `localStorage`, and an unread-message badge.
+
 ## Tech Stack
 
 - **Backend:** Python 3.11+, FastAPI, Pydantic
-- **LLM:** Configurable provider/model chain using HTTPX, JSON parsing, retries, and quota failover
+- **LLM:** Configurable provider/model chain using HTTPX, JSON parsing, retries, quota failover, and a per-provider/model circuit breaker
 - **Optimizer:** PuLP 3.3.0 with bundled CBC solver
 - **Verification:** Independent deterministic schedule replay
 - **Tests:** pytest and FastAPI TestClient, with optional live LLM checks
+- **Frontend:** React 19, TypeScript, Vite 7, Tailwind CSS v4, Framer Motion, Recharts
+- **Deployment:** Docker (backend, Render web service) + static site (frontend, Render)
 
 ## Roadmap
 
-1. Deploy and verify the public endpoint using [DEPLOYMENT.md](DEPLOYMENT.md). Docker packaging and a Render Blueprint are provided; hosting publication and Linux image verification remain pending.
-2. Add deployment-specific configuration and a reproducible sample walkthrough.
+1. ~~Deploy and verify the public endpoint.~~ Live on Render — backend is a Docker web service, frontend is a static site built from `frontend/`. See [DEPLOYMENT.md](DEPLOYMENT.md) and [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md).
+2. Run `judge_simulator.py --base-url <deployed backend URL>` against the live deployment to confirm parity with local results.
+3. Code-split the frontend bundle (currently a single ~900 KB chunk) with dynamic imports for the charting and Copilot modules.
