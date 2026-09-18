@@ -4,6 +4,7 @@ import {
   ChevronDown,
   Copy,
   FileJson,
+  Library,
   Plus,
   RotateCcw,
   Sparkles,
@@ -13,12 +14,17 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import type { BatteryConfig, Scenario } from "@/types";
+import samplePack from "@/data/sampleCases.json";
+
+type SamplePackCase = { id: string; label: string; input: Scenario };
+const samplePackCases = (samplePack as { cases: SamplePackCase[] }).cases;
 
 type ScenarioBuilderProps = {
   scenario: Scenario;
   onChange: (next: Scenario) => void;
   onRandomize: () => void;
   onLoadJson: (value: string) => void;
+  onLoadSampleCase: (caseId: string) => void;
   sampleJson: string;
 };
 
@@ -39,6 +45,7 @@ export function ScenarioBuilder({
   onChange,
   onRandomize,
   onLoadJson,
+  onLoadSampleCase,
   sampleJson,
 }: ScenarioBuilderProps) {
   const [sampleOpen, setSampleOpen] = useState(false);
@@ -121,6 +128,23 @@ export function ScenarioBuilder({
               onChange={(event) => onChange({ ...scenario, scenario_id: event.target.value })}
               placeholder="north-grid-ops-01"
             />
+          </div>
+        </label>
+        <label className="field-label">
+          <span><Library size={12} style={{ display: "inline", marginRight: 4, verticalAlign: -1 }} /> Public sample pack</span>
+          <div className="input-shell input-shell-wide">
+            <select
+              aria-label="Load a public sample case"
+              value=""
+              onChange={(event) => {
+                if (event.target.value) onLoadSampleCase(event.target.value);
+              }}
+            >
+              <option value="" disabled>Load a sample case ({samplePackCases.length} available)</option>
+              {samplePackCases.map((sampleCase) => (
+                <option key={sampleCase.id} value={sampleCase.id}>{sampleCase.id} — {sampleCase.label}</option>
+              ))}
+            </select>
           </div>
         </label>
         <div className="json-loader-wrap">

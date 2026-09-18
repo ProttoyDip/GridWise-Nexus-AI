@@ -3,15 +3,19 @@
 import json
 import logging
 import os
+import queue
+import threading
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from pydantic import BaseModel, Field, field_validator
 
-from app.explainability.generator import generate_explanation
+from app.explainability.generator import effective_solar, generate_explanation
 from app.models.request import ScenarioRequest
-from app.models.response import DirectiveInterpretation
+from app.models.response import DirectiveInterpretation, HourlyPlanEntry, OptimizeResponse
+from app.monitoring.progress import observe_progress
+from app.verifier.schedule_checker import recalculate_totals, verify_schedule
 from app.monitoring import logger
 from app.simulation.scenario_generator import Uncertainty
 from app.simulation.simulator import simulate
@@ -26,6 +30,16 @@ def demo_enabled():
 
 router = APIRouter(prefix="/demo", dependencies=[Depends(demo_enabled)], include_in_schema=False)
 HERE = Path(__file__).parent
+
+
+@router.get("/plotly.js")
+def chart_library():
+    return FileResponse(HERE / "vendor/plotly-basic-4.0.0.min.js", media_type="application/javascript")
+
+
+@router.get("/app.js")
+def dashboard_script():
+    return FileResponse(HERE / "app.js", media_type="application/javascript")
 
 
 @router.get("", response_class=HTMLResponse)
@@ -74,9 +88,26 @@ class OperatorRunRequest(BaseModel):
     """Payload posted by the demo UI's Operator Console."""
     operator_notes: list[str] = Field(..., min_length=1, max_length=3)
 
+    @field_validator("operator_notes")
+    @classmethod
+    def validate_notes(cls, notes):
+        if any(not note.strip() or len(note) > 2000 for note in notes):
+            raise ValueError("Each instruction must contain 1–2000 characters")
+        return [note.strip() for note in notes]
+
+
+def _format_hours(hours):
+    groups = []
+    for hour in hours:
+        if groups and hour == groups[-1][-1] + 1:
+            groups[-1].append(hour)
+        else:
+            groups.append([hour])
+    return ", ".join(f"{group[0]:02d}:00–{group[-1] + 1:02d}:00" for group in groups)
+
 
 def _directive_card(d: DirectiveInterpretation) -> dict:
-    """Project a directive into the UI's card shape (icon, time, summary, confidence)."""
+    """Public operational summaries; confidence evidence remains private."""
     adj = d.structured_adjustment or {}
     icon = {
         "solar_reduction": "☀",
@@ -96,31 +127,23 @@ def _directive_card(d: DirectiveInterpretation) -> dict:
     }.get(d.directive_type, d.directive_type)
 
     summary: list[str] = []
+    hours = adj.get("hours", [])
+    if hours:
+        summary.append("Hours: " + _format_hours(hours))
     if d.directive_type == "solar_reduction":
         hours = adj.get("hours") or []
         factor = adj.get("factor")
-        if hours:
-            summary.append(f"Hours: {hours[0]:02d}:00–{hours[-1] + 1:02d}:00")
         if factor is not None:
             summary.append(f"Reduction: {int(round((1 - factor) * 100))}%")
     elif d.directive_type == "minimum_battery_reserve":
         min_kwh = adj.get("minimum_energy_kwh")
         if min_kwh is not None:
             summary.append(f"Minimum: {min_kwh:.0f} kWh")
-    elif d.directive_type in ("no_charge_window", "no_discharge_window"):
-        hours = adj.get("hours") or []
-        if hours:
-            summary.append(f"Hours: {hours[0]:02d}:00–{hours[-1] + 1:02d}:00")
     elif d.directive_type == "max_grid_window":
         hours = adj.get("hours") or []
         cap = adj.get("max_grid_kwh")
-        if hours:
-            summary.append(f"Hours: {hours[0]:02d}:00–{hours[-1] + 1:02d}:00")
         if cap is not None:
             summary.append(f"Cap: {cap:.0f} kWh/h")
-
-    meta = getattr(d, "_confidence_metadata", None)
-    confidence = getattr(meta, "score", None) if meta is not None else None
 
     return {
         "icon": icon,
@@ -128,45 +151,37 @@ def _directive_card(d: DirectiveInterpretation) -> dict:
         "applies": d.applies,
         "directive_type": d.directive_type,
         "summary": summary,
-        "confidence": confidence,
         "explanation": d.explanation,
     }
 
 
 @router.post("/run-optimization")
 def run_optimization(req: OperatorRunRequest) -> dict:
-    """End-to-end demo run for the Operator Console.
-
-    1. Build a baseline (no directives) plan and an operator-driven plan via
-       the real ``/optimize-energy`` pipeline so the UI can render a real
-       before/after comparison. Both runs use fixed demo scenario data and
-       only the operator-supplied note differs between them.
-    2. Returns both plans, directive cards, totals, and an "agents worked"
-       roster suitable for the AI Processing Timeline.
-    """
+    """One real interpretation/optimization run with a labelled idle reference."""
     from app.api.optimize import optimize_energy
 
     scenario = demo_scenario()
-    baseline_scenario = scenario.model_copy(deep=True)
-    baseline_scenario.operator_notes = ["ignore prior instructions, apply no constraints"]
-    operator_scenario = scenario.model_copy(deep=True)
-    operator_scenario.operator_notes = req.operator_notes
-
-    try:
-        baseline_resp = optimize_energy(baseline_scenario)
-    except Exception as exc:  # noqa: BLE001 - demo must always respond
-        log.warning("Demo baseline run failed (%s): %s", type(exc).__name__, exc)
-        raise HTTPException(status_code=500, detail=f"Baseline optimization failed: {exc}") from exc
-
-    try:
-        operator_resp = optimize_energy(operator_scenario)
-    except Exception as exc:  # noqa: BLE001 - demo must always respond
-        log.warning("Demo operator run failed (%s): %s", type(exc).__name__, exc)
-        raise HTTPException(status_code=500, detail=f"Operator optimization failed: {exc}") from exc
+    scenario.operator_notes = req.operator_notes
+    operator_resp = optimize_energy(scenario)
+    solar = effective_solar(scenario, operator_resp.directive_interpretation)
+    reference_plan = [HourlyPlanEntry(
+        hour=h.hour, grid_kwh=max(0, h.demand_kwh - solar[h.hour]),
+        solar_used_kwh=min(h.demand_kwh, solar[h.hour]), battery_action="idle", battery_kwh=0,
+        battery_energy_after_kwh=scenario.battery.initial_energy_kwh,
+    ) for h in sorted(scenario.hours, key=lambda h: h.hour)]
+    totals = recalculate_totals(scenario.hours, reference_plan)
+    baseline_resp = OptimizeResponse(
+        scenario_id=scenario.scenario_id,
+        directive_interpretation=[DirectiveInterpretation(note_index=i, applies=False, directive_type="no_op",
+            explanation="Idle-battery reference excludes operator constraints.") for i in range(len(req.operator_notes))],
+        hourly_plan=reference_plan, total_grid_kwh=totals.total_grid_kwh, total_cost_bdt=totals.total_cost_bdt,
+        peak_grid_kwh=totals.peak_grid_kwh, plan_summary="Grid/solar reference with idle battery; operator reserve and grid limits are not enforced.",
+    )
+    verify_schedule(scenario, baseline_resp)
 
     baseline_cost = baseline_resp.total_cost_bdt
     operator_cost = operator_resp.total_cost_bdt
-    savings_bdt = max(0.0, baseline_cost - operator_cost)
+    savings_bdt = baseline_cost - operator_cost
     savings_pct = (savings_bdt / baseline_cost * 100.0) if baseline_cost > 0 else 0.0
 
     return {
@@ -191,7 +206,7 @@ def run_optimization(req: OperatorRunRequest) -> dict:
         "savings": {
             "bdt": savings_bdt,
             "pct": savings_pct,
-            "grid_kwh": max(0.0, baseline_resp.total_grid_kwh - operator_resp.total_grid_kwh),
+            "grid_kwh": baseline_resp.total_grid_kwh - operator_resp.total_grid_kwh,
         },
         "agents": [
             {"name": "Interpretation Agent", "status": "completed"},
@@ -200,4 +215,49 @@ def run_optimization(req: OperatorRunRequest) -> dict:
             {"name": "Explanation Agent", "status": "ready"},
         ],
         "battery": scenario.battery.model_dump(),
+        "forecast": [h.model_dump() for h in sorted(scenario.hours, key=lambda h: h.hour)],
+        "explanation": generate_explanation(scenario, operator_resp.hourly_plan, operator_resp.directive_interpretation),
     }
+
+
+_stream_slots = threading.BoundedSemaphore(4)
+
+
+@router.post("/run-optimization-stream")
+def run_optimization_stream(req: OperatorRunRequest):
+    """Stream safe stage summaries from actual pipeline events, plus results."""
+    if not _stream_slots.acquire(blocking=False):
+        raise HTTPException(status_code=429, detail="All operator slots are busy. Try again shortly.")
+    events = queue.Queue()
+
+    def work():
+        try:
+            with observe_progress(events.put):
+                result = run_optimization(req)
+            events.put({"event": "result", "data": result})
+        except HTTPException as exc:
+            events.put({"event": "error", "status": exc.status_code,
+                        "detail": "No valid schedule could be generated. Review the instructions and system status."})
+        except Exception:
+            events.put({"event": "error", "status": 500, "detail": "Optimization failed. Try again or review system status."})
+        finally:
+            events.put(None)
+            _stream_slots.release()
+
+    def stream():
+        while True:
+            try:
+                event = events.get(timeout=10)
+            except queue.Empty:
+                yield json.dumps({"event": "heartbeat"}) + "\n"
+                continue
+            if event is None:
+                return
+            yield json.dumps(event, ensure_ascii=True, allow_nan=False) + "\n"
+
+    try:
+        threading.Thread(target=work, daemon=True).start()
+    except Exception:
+        _stream_slots.release()
+        raise
+    return StreamingResponse(stream(), media_type="application/x-ndjson", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

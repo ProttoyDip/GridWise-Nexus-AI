@@ -320,9 +320,9 @@
       </div>
     </div>
     <div class="status-strip" id="status-strip" aria-live="polite">
-      <span class="pill ok" id="pill-llm"><span class="dot"></span><span>LLM System</span><span id="llm-text">Online</span></span>
-      <span class="pill ok" id="pill-opt"><span class="dot"></span><span>Optimizer</span><span>Ready</span></span>
-      <span class="pill ok" id="pill-grid"><span class="dot"></span><span>Grid Simulation</span><span>Active</span></span>
+      <span class="pill warn" id="pill-llm"><span class="dot"></span><span>LLM System</span><span id="llm-text">Checking</span></span>
+      <span class="pill warn" id="pill-opt"><span class="dot"></span><span>Optimizer</span><span id="opt-text">Checking</span></span>
+      <span class="pill warn" id="pill-grid"><span class="dot"></span><span>Grid Simulation</span><span id="grid-text">Checking</span></span>
     </div>
   </div>
   <div class="container" style="padding-top:0">
@@ -345,12 +345,13 @@
         </div>
         <div class="card-body">
           <label for="note" class="sr-only">Operator command</label>
-          <textarea id="note" placeholder="Describe your intent in natural language &mdash; e.g. 'Reduce solar generation from 1 PM to 3 PM and keep battery reserve above 30%'"></textarea>
+          <textarea id="note" maxlength="6000" placeholder="Reduce solar generation from 1 PM to 3 PM by 75%&#10;Keep battery reserve above 30% all day"></textarea>
+          <p class="muted" style="font-size:12px;margin:6px 0">One instruction per line, up to three. Demo campus: 100 kWh battery, 24-hour forecast.</p>
           <div class="examples-label">Try an example</div>
           <div class="examples" id="examples" aria-label="Example operator commands">
             <button class="chip" data-example="Reduce solar generation between 13:00 and 15:00 by 75%">&#9728; Solar Maintenance</button>
             <button class="chip" data-example="Keep battery reserve above 30 kWh at all times">&#128267; Battery Protection</button>
-            <button class="chip" data-example="Cap grid usage at 50 kWh between 18:00 and 22:00">&#9889; Peak Demand Control</button>
+            <button class="chip" data-example="Cap grid usage at 20 kWh between 18:00 and 22:00">&#9889; Peak Demand Control</button>
           </div>
           <div class="console-actions">
             <div class="row">
@@ -392,13 +393,13 @@
               <div class="savings" id="savings">
                 <div class="cell"><div class="label">Before AI &middot; Daily Cost</div><div class="value" id="cost-before">&mdash;</div><div class="delta" id="cost-before-delta">&nbsp;</div></div>
                 <div class="cell"><div class="label">After AI &middot; Daily Cost</div><div class="value" id="cost-after">&mdash;</div><div class="delta" id="cost-after-delta">&nbsp;</div></div>
-                <div class="cell highlight"><div class="label">Savings</div><div class="value" id="savings-value">&mdash;</div><div class="delta" id="savings-delta">&nbsp;</div></div>
+                <div class="cell highlight"><div class="label" id="savings-label">Savings vs reference</div><div class="value" id="savings-value">&mdash;</div><div class="delta" id="savings-delta">&nbsp;</div></div>
               </div>
             </div>
           </div>
 
           <div class="card hidden" id="compare-card">
-            <div class="card-head"><h2>Before vs After AI</h2><span class="muted" style="font-size:12.5px">grid usage &amp; cost</span></div>
+            <div class="card-head"><h2>Before vs After AI</h2><span class="muted" style="font-size:12.5px">idle battery vs optimized dispatch</span></div>
             <div class="card-body">
               <div class="compare">
                 <div class="col">
@@ -417,6 +418,7 @@
                   <div class="bar"><span id="bar-cost-after" style="width:0%"></span></div>
                 </div>
               </div>
+              <p class="muted" style="font-size:12px">Reference uses the same available solar with an idle battery. It does not enforce operator reserve or grid caps. Costs can rise to satisfy safety constraints.</p>
             </div>
           </div>
 
@@ -426,11 +428,11 @@
               <div class="chart-grid">
                 <div>
                   <div class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px">Battery Reserve</div>
-                  <div class="chart-wrap"><canvas id="chart-battery" aria-label="Battery reserve over 24 hours"></canvas></div>
+                  <div class="chart-wrap" id="chart-battery" role="img" aria-label="Battery energy, charge and discharge actions, and required reserve"><p class="empty">Battery chart appears after optimization.</p></div>
                 </div>
                 <div>
                   <div class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px">Grid Demand</div>
-                  <div class="chart-wrap"><canvas id="chart-grid" aria-label="Grid demand over 24 hours"></canvas></div>
+                  <div class="chart-wrap" id="chart-grid" role="img" aria-label="Before and after grid imports over 24 hours"><p class="empty">Grid chart appears after optimization.</p></div>
                 </div>
               </div>
             </div>

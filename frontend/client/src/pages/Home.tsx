@@ -3,63 +3,37 @@ import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, Cpu, Github, Loader2, 
 import { useEffect, useMemo, useState } from "react";
 import { ResultsPanel } from "@/components/ResultsPanel";
 import { ScenarioBuilder } from "@/components/ScenarioBuilder";
-import type { BatteryConfig, HourInput, OptimizeResponse, Scenario } from "@/types";
+import type { HourInput, OptimizeResponse, Scenario } from "@/types";
+import samplePack from "@/data/sampleCases.json";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
 
-const baseBattery: BatteryConfig = {
-  capacity_kwh: 120,
-  initial_energy_kwh: 74,
-  minimum_energy_kwh: 18,
-  max_charge_kwh_per_hour: 32,
-  max_discharge_kwh_per_hour: 38,
-};
+type SamplePackCase = { id: string; label: string; input: Scenario };
+const samplePackCases = (samplePack as { cases: SamplePackCase[] }).cases;
 
-function makeHours(): HourInput[] {
-  return Array.from({ length: 24 }, (_, hour) => {
-    const solar = hour >= 6 && hour <= 18 ? Math.max(0, 24 * Math.sin(((hour - 6) / 12) * Math.PI) + (hour % 3) * 1.2) : 0;
-    const eveningPeak = hour >= 18 && hour <= 22 ? 30 : 0;
-    const midday = hour >= 10 && hour <= 15 ? 10 : 0;
-    return {
-      hour,
-      demand_kwh: Math.round((45 + eveningPeak + midday + (hour < 6 ? 6 : 0) + (hour % 4) * 1.5) * 10) / 10,
-      solar_kwh: Math.round(solar * 10) / 10,
-      tariff_bdt_per_kwh: Number((hour >= 18 && hour <= 22 ? 16.5 : hour >= 8 && hour <= 17 ? 11.8 : 7.4).toFixed(2)),
-    };
-  });
+function cloneSampleCase(caseId: string): Scenario {
+  const found = samplePackCases.find((entry) => entry.id === caseId) ?? samplePackCases[0];
+  return JSON.parse(JSON.stringify(found.input)) as Scenario;
 }
 
 function createInitialScenario(): Scenario {
-  return {
-    scenario_id: "dhaka-west / evening-peak-01",
-    operator_notes: ["Protect reserve through the 18:00–22:00 peak window", "Prioritize solar before grid draw"],
-    hours: makeHours(),
-    battery: baseBattery,
-  };
+  return cloneSampleCase(samplePackCases[0].id);
 }
 
 function createSampleJson(): string {
   return JSON.stringify(createInitialScenario(), null, 2);
 }
 
-function randomScenario(): Scenario {
+function randomizedFromPack(): Scenario {
+  const pick = samplePackCases[Math.floor(Math.random() * samplePackCases.length)];
+  const base = JSON.parse(JSON.stringify(pick.input)) as Scenario;
   const rng = (min: number, max: number) => min + Math.random() * (max - min);
-  const hours = Array.from({ length: 24 }, (_, hour) => {
-    const solarShape = hour >= 6 && hour <= 18 ? Math.sin(((hour - 6) / 12) * Math.PI) : 0;
-    const peakLift = hour >= 18 && hour <= 22 ? 26 : hour >= 9 && hour <= 15 ? 11 : 0;
-    return {
-      hour,
-      demand_kwh: Number(Math.max(18, 38 + peakLift + rng(-4, 7) + (hour < 5 ? 7 : 0)).toFixed(1)),
-      solar_kwh: Number(Math.max(0, solarShape * rng(18, 34) + rng(-1.5, 1.5)).toFixed(1)),
-      tariff_bdt_per_kwh: Number((hour >= 18 && hour <= 22 ? rng(15.2, 18.3) : hour >= 8 && hour <= 17 ? rng(10.4, 13.1) : rng(6.2, 8.2)).toFixed(2)),
-    };
-  });
-  return {
-    scenario_id: `generated / ${new Date().toISOString().slice(11, 19).replaceAll(":", "")}`,
-    operator_notes: ["Preserve a 20 kWh reserve for critical loads", "Use solar surplus to recharge when available"],
-    hours,
-    battery: { capacity_kwh: 120, initial_energy_kwh: 68, minimum_energy_kwh: 20, max_charge_kwh_per_hour: 30, max_discharge_kwh_per_hour: 36 },
-  };
+  const hours: HourInput[] = base.hours.map((row) => ({
+    ...row,
+    demand_kwh: Number(Math.max(0, row.demand_kwh * rng(0.9, 1.1)).toFixed(1)),
+    solar_kwh: Number(Math.max(0, row.solar_kwh * rng(0.85, 1.15)).toFixed(1)),
+  }));
+  return { ...base, scenario_id: `${base.scenario_id} / variant-${new Date().toISOString().slice(11, 19).replaceAll(":", "")}`, hours };
 }
 
 function isScenario(value: unknown): value is Scenario {
@@ -105,6 +79,12 @@ export default function Home() {
   }, []);
 
   const sampleJson = useMemo(createSampleJson, []);
+
+  const loadSampleCase = (caseId: string) => {
+    setScenario(cloneSampleCase(caseId));
+    setResult(null);
+    setError(null);
+  };
 
   const loadJson = (value: string) => {
     try {
@@ -159,7 +139,7 @@ export default function Home() {
       </section>
 
       <div className="workspace-grid">
-        <div className="builder-column"><ScenarioBuilder scenario={scenario} onChange={setScenario} onRandomize={() => { setScenario(randomScenario()); setResult(null); setError(null); }} onLoadJson={loadJson} sampleJson={sampleJson} /></div>
+        <div className="builder-column"><ScenarioBuilder scenario={scenario} onChange={setScenario} onRandomize={() => { setScenario(randomizedFromPack()); setResult(null); setError(null); }} onLoadJson={loadJson} onLoadSampleCase={loadSampleCase} sampleJson={sampleJson} /></div>
         <div className="results-column"><ResultsPanel result={result} loading={loading} /></div>
       </div>
 

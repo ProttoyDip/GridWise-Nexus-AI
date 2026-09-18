@@ -22,6 +22,7 @@ from app.llm.adaptive_consensus import (
 from app.models.request import ScenarioRequest
 from app.models.response import DirectiveInterpretation, HourlyPlanEntry, OptimizeResponse
 from app.monitoring import logger as monitoring_logger
+from app.monitoring.progress import emit_progress
 from app.optimizer.cache import optimization_cache, optimization_cache_key
 from app.optimizer.scheduler import build_hourly_plan
 from app.optimizer.solver import OptimizationError
@@ -37,6 +38,7 @@ def _enrich(request_id, payload, response, futures):
         record_decision(request_id, payload, response, futures)
     except Exception as exc:
         logger.warning("Optional decision enrichment failed (%s)", type(exc).__name__)
+    emit_progress(5, "completed")
     return response
 
 
@@ -87,6 +89,7 @@ def _verified_response(
     payload: ScenarioRequest, directives: list[DirectiveInterpretation],
     plan: list[HourlyPlanEntry], cached_cost: float | None = None,
 ) -> OptimizeResponse:
+    emit_progress(5, "running")
     totals = recalculate_totals(payload.hours, plan)
     response = OptimizeResponse(
         scenario_id=payload.scenario_id, directive_interpretation=directives,
@@ -106,10 +109,16 @@ def optimize_energy(payload: ScenarioRequest) -> OptimizeResponse:
     directives: list[DirectiveInterpretation] = []
     optimizer_time_seconds = 0.0
     try:
+        emit_progress(1, "running")
+        interpreted = interpret_operator_notes(payload.operator_notes, payload.hours, payload.battery)
+        emit_progress(1, "completed")
+        emit_progress(2, "completed")
+        emit_progress(3, "running")
         directives = validate_directive_interpretation(
-            interpret_operator_notes(payload.operator_notes, payload.hours, payload.battery),
+            interpreted,
             battery=payload.battery,
         )
+        emit_progress(3, "completed")
         futures = None
         if os.getenv("GRIDWISE_DIGITAL_TWIN_ENABLED", "0") == "1":
             try:
@@ -123,6 +132,7 @@ def optimize_energy(payload: ScenarioRequest) -> OptimizeResponse:
             cached = optimization_cache.get(key)
             if cached is not None:
                 try:
+                    emit_progress(4, "completed")
                     response = _verified_response(payload, directives, cached.hourly_plan, cached.total_cost_bdt)
                     return _enrich(request_id, payload, response, futures)
                 except Exception as exc:
@@ -133,8 +143,10 @@ def optimize_energy(payload: ScenarioRequest) -> OptimizeResponse:
             # Cache infrastructure is optional, including key generation.
             logger.warning("Optimization cache lookup failed (%s)", type(exc).__name__)
         optimizer_start = time.perf_counter()
+        emit_progress(4, "running")
         plan = build_hourly_plan(payload, directives)
         optimizer_time_seconds = time.perf_counter() - optimizer_start
+        emit_progress(4, "completed")
         response = _verified_response(payload, directives, plan)
         if key is not None:
             try:
