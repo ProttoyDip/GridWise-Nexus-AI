@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ArrowRight, TrendingDown } from "lucide-react";
+import { ArrowRight, Scale, TrendingDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { OptimizeResponse, Scenario } from "@/types";
 
@@ -15,35 +15,35 @@ export function BeforeAfterComparison({ apiBase, scenario, result }: { apiBase: 
   const [baseline, setBaseline] = useState<OptimizeResponse | null>(null);
   const [state, setState] = useState<BaselineState>("idle");
 
+  // Resets to idle whenever a new result comes in, so a stale baseline
+  // from a previous scenario is never shown next to the new result —
+  // comparing runs a second /optimize-energy call (LLM + solver), so it
+  // only happens when the operator explicitly asks for it below.
   useEffect(() => {
-    let cancelled = false;
-    setState("loading");
+    setState("idle");
     setBaseline(null);
-    const run = async () => {
-      try {
-        const neutralScenario: Scenario = { ...scenario, operator_notes: ["No special operating instructions for this window."] };
-        const response = await fetch(`${apiBase}/optimize-energy`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(neutralScenario),
-        });
-        const payload: unknown = await response.json();
-        if (cancelled) return;
-        if (response.ok && isOptimizeResponse(payload)) {
-          setBaseline(payload);
-          setState("ready");
-        } else {
-          setState("error");
-        }
-      } catch {
-        if (!cancelled) setState("error");
-      }
-    };
-    run();
-    return () => { cancelled = true; };
-  }, [apiBase, scenario, result]);
+  }, [result]);
 
-  if (state === "error") return null;
+  const runComparison = async () => {
+    setState("loading");
+    try {
+      const neutralScenario: Scenario = { ...scenario, operator_notes: ["No special operating instructions for this window."] };
+      const response = await fetch(`${apiBase}/optimize-energy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(neutralScenario),
+      });
+      const payload: unknown = await response.json();
+      if (response.ok && isOptimizeResponse(payload)) {
+        setBaseline(payload);
+        setState("ready");
+      } else {
+        setState("error");
+      }
+    } catch {
+      setState("error");
+    }
+  };
 
   const costDelta = baseline ? result.total_cost_bdt - baseline.total_cost_bdt : 0;
   const gridDelta = baseline ? result.total_grid_kwh - baseline.total_grid_kwh : 0;
@@ -57,6 +57,15 @@ export function BeforeAfterComparison({ apiBase, scenario, result }: { apiBase: 
           <span className={`live-tag ${savingsPct > 0 ? "" : "applies-no"}`}><TrendingDown size={12} /> {savingsPct > 0 ? `${savingsPct.toFixed(1)}% lower cost` : `${Math.abs(savingsPct).toFixed(1)}% higher cost`}</span>
         )}
       </div>
+
+      {(state === "idle" || state === "error") && (
+        <div className="comparison-prompt">
+          <p>{state === "error" ? "Couldn't reach the API for a baseline run. Try again." : "Runs one extra optimization with directives cleared, so you can see exactly what they changed."}</p>
+          <button type="button" className="button button-outline" onClick={runComparison}>
+            <Scale size={14} /> Compare against baseline
+          </button>
+        </div>
+      )}
 
       {state === "loading" && <div className="loading-stack"><div className="loading-bar wide" /><div className="loading-bar" /></div>}
 
