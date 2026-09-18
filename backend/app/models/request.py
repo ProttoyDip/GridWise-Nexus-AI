@@ -1,0 +1,56 @@
+"""Request schema: scenario_id, operator_notes, hours[24], battery.
+
+Mirrors Problem Statement Section 07 (Request Schema) exactly.
+"""
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+class HourEntry(BaseModel):
+    hour: int = Field(..., ge=0, le=23)
+    demand_kwh: float = Field(..., ge=0)
+    solar_kwh: float = Field(..., ge=0)
+    tariff_bdt_per_kwh: float = Field(..., ge=0)
+
+
+class BatteryConfig(BaseModel):
+    capacity_kwh: float = Field(..., gt=0)
+    initial_energy_kwh: float = Field(..., ge=0)
+    minimum_energy_kwh: float = Field(..., ge=0)
+    max_charge_kwh_per_hour: float = Field(..., ge=0)
+    max_discharge_kwh_per_hour: float = Field(..., ge=0)
+
+    @model_validator(mode="after")
+    def check_bounds(self) -> "BatteryConfig":
+        if self.minimum_energy_kwh > self.capacity_kwh:
+            raise ValueError("minimum_energy_kwh cannot exceed capacity_kwh")
+        if not (self.minimum_energy_kwh <= self.initial_energy_kwh <= self.capacity_kwh):
+            raise ValueError(
+                "initial_energy_kwh must be between minimum_energy_kwh and capacity_kwh"
+            )
+        return self
+
+
+class ScenarioRequest(BaseModel):
+    scenario_id: str = Field(..., min_length=1)
+    operator_notes: list[str] = Field(..., min_length=1, max_length=3)
+    hours: list[HourEntry] = Field(..., min_length=24, max_length=24)
+    battery: BatteryConfig
+
+    @field_validator("operator_notes")
+    @classmethod
+    def notes_non_empty(cls, v: list[str]) -> list[str]:
+        for note in v:
+            if not note or not note.strip():
+                raise ValueError("operator_notes entries must be non-empty strings")
+        return v
+
+    @field_validator("hours")
+    @classmethod
+    def hours_cover_0_to_23(cls, v: list[HourEntry]) -> list[HourEntry]:
+        if len(v) != 24:
+            raise ValueError("hours must contain exactly 24 entries")
+        hour_values = sorted(h.hour for h in v)
+        if hour_values != list(range(24)):
+            raise ValueError("hours must contain each hour from 0 to 23 exactly once")
+        return v
