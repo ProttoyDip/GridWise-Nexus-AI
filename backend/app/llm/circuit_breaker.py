@@ -225,7 +225,9 @@ class CircuitBreaker:
             survivors = [
                 (name, provider)
                 for name, provider in chain
-                if not self._is_open_locked(self._states.get((name, provider.model)))
+                if not self._is_open_locked(
+                    self._states.get((name, getattr(provider, "model", name)))
+                )
             ]
         return survivors if survivors else chain
 

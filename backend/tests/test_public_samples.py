@@ -109,6 +109,10 @@ def assert_schedule_and_cost(payload, result, expected_directives, optimal_cost)
 @pytest.mark.parametrize("case", CASES, ids=[case["id"] for case in CASES])
 @pytest.mark.parametrize("variant", ["original", "reordered", "scaled"])
 def test_public_sample_pipeline(case, variant, monkeypatch):
+    from app.api import optimize
+    # Exercise the base interpreter with replay providers; adaptive routing
+    # has separate fake-provider tests and the live API test below.
+    monkeypatch.setattr(optimize, "interpret_operator_notes", interpreter.interpret_operator_notes)
     payload = deepcopy(case["input"])
     expected = deepcopy(case["expected_output"]["directive_interpretation"])
     optimal_cost = case["expected_output"]["total_cost_bdt"]

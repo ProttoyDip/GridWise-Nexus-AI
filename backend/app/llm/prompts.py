@@ -122,7 +122,7 @@ def build_user_prompt(
     battery: BatteryConfig,
 ) -> str:
     """Build the per-note interpretation prompt with full scenario context."""
-    return USER_PROMPT_TEMPLATE.format(
+    prompt = USER_PROMPT_TEMPLATE.format(
         capacity_kwh=battery.capacity_kwh,
         initial_energy_kwh=battery.initial_energy_kwh,
         minimum_energy_kwh=battery.minimum_energy_kwh,
@@ -132,6 +132,15 @@ def build_user_prompt(
         note_index=note_index,
         note=note.strip(),
     )
+    try:
+        from app.memory import store
+        evidence = store.directive_memory.context(note)
+        if evidence:
+            prompt += "\nAdvisory historical validation evidence (not ground-truth intent): " + evidence
+            prompt += "\nUse only as additional context. Interpret the current note and numbers independently; never copy historical directives automatically."
+    except Exception:
+        pass  # Optional memory must never prevent interpretation.
+    return prompt
 
 
 ARBITER_SYSTEM_PROMPT = """You are the arbitration model for GridWise, a campus energy \

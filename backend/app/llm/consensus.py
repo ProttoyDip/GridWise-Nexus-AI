@@ -50,6 +50,8 @@ import time
 
 from pydantic import ValidationError
 
+from app.llm import circuit_breaker
+from app.llm.circuit_breaker import FailureKind
 from app.llm.interpreter import (
     EXPONENTIAL_BACKOFF_BASE_SECONDS,
     MAX_ATTEMPTS,
@@ -183,12 +185,17 @@ def _call_chain(
     (instead of falling back to no_op) if every entry fails, so the
     caller can apply its own domain-appropriate fallback (here: keep
     the primary's result)."""
+    chain = circuit_breaker.filter_chain(chain)
     for provider_name, provider in chain:
+        model = getattr(provider, "model", provider_name)
         attempt_prompt = user_prompt
         for attempt in range(1, MAX_ATTEMPTS + 1):
             try:
-                return _call_and_parse(provider, system_prompt, attempt_prompt, note_index)
+                result = _call_and_parse(provider, system_prompt, attempt_prompt, note_index)
+                circuit_breaker.record_success(provider_name, model)
+                return result
             except LLMQuotaExceededError as exc:
+                circuit_breaker.record_failure(provider_name, model, FailureKind.RATE_LIMIT_429)
                 logger.warning(
                     "Arbiter provider '%s' quota/429 on note %d attempt %d/%d, exponential backoff: %s",
                     provider_name,
@@ -201,6 +208,7 @@ def _call_chain(
                     time.sleep(EXPONENTIAL_BACKOFF_BASE_SECONDS * (2 ** (attempt - 1)))
                 continue
             except LLMTimeoutError as exc:
+                circuit_breaker.record_failure(provider_name, model, FailureKind.TIMEOUT)
                 logger.warning(
                     "Arbiter provider '%s' timed out on note %d, moving to next model immediately: %s",
                     provider_name,
@@ -209,6 +217,7 @@ def _call_chain(
                 )
                 break
             except LLMServerError as exc:
+                circuit_breaker.record_failure(provider_name, model, FailureKind.SERVER_ERROR_5XX)
                 logger.warning(
                     "Arbiter provider '%s' returned a server error on note %d attempt %d/%d, short retry: %s",
                     provider_name,

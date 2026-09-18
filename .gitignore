@@ -3,6 +3,8 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+.pytest_cache/
+backend/.pytest_tmp/
 
 # Env / secrets
 .env
@@ -14,3 +16,12 @@ venv/
 # OS / editor
 .DS_Store
 .vscode/
+
+# Local verification artifacts and runtime feedback
+.pytest_cache/
+.pytest_tmp/
+.test-energy-twin-*/
+directive-memory-runtime.json
+
+# Local tool cache
+.puku/

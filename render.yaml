@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: gridwise-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    envVars:
+      - key: LLM_PROVIDERS
+        sync: false
+      - key: LLM_API_KEY
+        sync: false
+      - key: CORS_ALLOW_ORIGINS
+        value: "*"
+      - key: INTERPRETATION_CACHE_TTL_SECONDS
+        value: "300"
+      - key: OPTIMIZATION_CACHE_TTL_SECONDS
+        value: "300"

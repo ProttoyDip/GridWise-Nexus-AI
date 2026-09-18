@@ -301,3 +301,51 @@ def test_interpret_operator_notes_preserves_order_and_indices(monkeypatch):
     assert [r.note_index for r in results] == [0, 1]
     assert results[0].directive_type == "solar_reduction"
     assert results[1].directive_type == "no_op"
+
+
+def test_open_circuit_is_skipped_without_being_called(monkeypatch):
+    from app.llm import circuit_breaker
+    from app.llm.circuit_breaker import FailureKind
+
+    monkeypatch.setattr(interpreter_module, "RETRY_BACKOFF_SECONDS", 0)
+    dead = ScriptedProvider([_no_op_json()])  # would succeed if called, but must not be
+    backup = ScriptedProvider([_no_op_json()])
+
+    for _ in range(circuit_breaker.FAILURE_THRESHOLD):
+        circuit_breaker.record_failure("openrouter", "openrouter", FailureKind.RATE_LIMIT_429)
+
+    result = interpreter_module._interpret_single_note_uncached(
+        _chain(("openrouter", dead), ("nararouter", backup)), "note text", 0, HOURS, BATTERY
+    )
+    assert result.directive_type == "no_op"
+    assert dead.calls == 0  # skipped: circuit was open
+    assert backup.calls == 1
+
+
+def test_success_resets_the_circuit(monkeypatch):
+    from app.llm import circuit_breaker
+    from app.llm.circuit_breaker import FailureKind
+
+    monkeypatch.setattr(interpreter_module, "RETRY_BACKOFF_SECONDS", 0)
+    circuit_breaker.record_failure("openrouter", "openrouter", FailureKind.RATE_LIMIT_429)
+    circuit_breaker.record_failure("openrouter", "openrouter", FailureKind.RATE_LIMIT_429)
+    assert circuit_breaker.is_open("openrouter", "openrouter") is False  # below threshold still
+
+    provider = ScriptedProvider([_no_op_json()])
+    interpreter_module._interpret_single_note_uncached(
+        _chain(("openrouter", provider)), "note text", 0, HOURS, BATTERY
+    )
+    state = circuit_breaker.get_state("openrouter", "openrouter")
+    assert state.failure_count == 0  # success cleared the prior 2 failures
+
+
+def test_per_note_deadline_stops_starting_new_models(monkeypatch):
+    monkeypatch.setattr(interpreter_module, "RETRY_BACKOFF_SECONDS", 0)
+    monkeypatch.setattr(interpreter_module, "MAX_TOTAL_SECONDS_PER_NOTE", 0)  # already expired
+
+    never_called = ScriptedProvider([_no_op_json()])
+    result = interpreter_module._interpret_single_note_uncached(
+        _chain(("openrouter", never_called)), "note text", 0, HOURS, BATTERY
+    )
+    assert result.directive_type == "no_op"
+    assert never_called.calls == 0

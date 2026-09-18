@@ -65,7 +65,10 @@ import time
 from pydantic import ValidationError
 
 from app.guardrails.validator import validate_directive
+from app.guardrails.physics_validator import correct_physical_values, validate_physical_directive
+from app.llm import circuit_breaker
 from app.llm.cache import build_directive_context, interpretation_cache, interpretation_cache_key
+from app.llm.circuit_breaker import FailureKind
 from app.llm.confidence import ConfidenceDecision, assess_confidence
 from app.llm.prompts import SYSTEM_PROMPT, build_repair_prompt, build_user_prompt
 from app.llm.json_parser import LLMOutputError, parse_json_object
@@ -113,6 +116,17 @@ RETRY_BACKOFF_SECONDS = 1.0
 EXPONENTIAL_BACKOFF_BASE_SECONDS = 1.0
 SHORT_RETRY_BACKOFF_SECONDS = 0.5
 
+# Hard wall-clock budget for a single note's entire chain walk. Without
+# this, a note that has to cascade through many rate-limited/hanging
+# free-tier models (observed live: 81s-114s for a single note) can run
+# well past a typical reverse-proxy/gateway timeout (often 30-60s),
+# turning a slow-but-eventually-successful request into a client-visible
+# 502/504 the server never even knows happened. Once the budget is spent,
+# the chain walk stops starting new provider attempts and falls through
+# to the same safe verify/no_op fallback used when providers are exhausted
+# — never a partial/inconsistent result.
+MAX_TOTAL_SECONDS_PER_NOTE = 25.0
+
 
 def _fallback_no_op(note_index: int, reason: str) -> DirectiveInterpretation:
     return DirectiveInterpretation(
@@ -144,6 +158,7 @@ def _call_and_parse(
     try:
         parsed = dict(raw_output) if isinstance(raw_output, dict) else _extract_json_object(raw_output)
         parsed["note_index"] = note_index
+        parsed = correct_physical_values(parsed)
         return validate_directive(parsed, note_index)
     except (ValueError, TypeError, RecursionError) as exc:
         raise LLMOutputError(raw_output, str(exc)) from exc
@@ -165,7 +180,13 @@ def _interpret_single_note(
         key, lambda: _interpret_single_note_uncached(provider_chain, note, note_index, hours, battery),
     )
     result.note_index = note_index
-    return validate_directive(result, note_index)
+    result = validate_directive(result, note_index)
+    try:
+        from app.memory import store
+        result = store.directive_memory.boost(note, result)
+    except Exception:
+        pass
+    return result
 
 
 def _interpret_single_note_uncached(
@@ -177,10 +198,21 @@ def _interpret_single_note_uncached(
 ) -> DirectiveInterpretation:
     user_prompt = build_user_prompt(note=note, note_index=note_index, hours=hours, battery=battery)
 
+    # Skip models whose circuit is already open (repeated recent 429/timeout/5xx)
+    # rather than paying a doomed request; falls back to the unfiltered chain
+    # if literally everything is currently open (see circuit_breaker.filter_chain).
+    provider_chain = circuit_breaker.filter_chain(provider_chain)
+
+    deadline = time.monotonic() + MAX_TOTAL_SECONDS_PER_NOTE
     last_error: Exception | None = None
     votes: list[tuple[str, DirectiveInterpretation]] = []
     models_used: list[str] = []
     for provider_name, provider in provider_chain:
+        if time.monotonic() >= deadline:
+            last_error = last_error or LLMProviderError(
+                f"note {note_index} exceeded its {MAX_TOTAL_SECONDS_PER_NOTE}s interpretation budget"
+            )
+            break
         model = getattr(provider, "model", provider_name)
         model_id = f"{provider_name}/{model}"
         if model_id in models_used:
@@ -190,6 +222,8 @@ def _interpret_single_note_uncached(
         for attempt in range(1, MAX_ATTEMPTS + 1):
             try:
                 candidate = _call_and_parse(provider, SYSTEM_PROMPT, attempt_prompt, note_index)
+                candidate = validate_physical_directive(candidate, battery, note_index)
+                circuit_breaker.record_success(provider_name, model)
                 votes.append((model_id, candidate))
                 winner, metadata = assess_confidence(votes, models_used)
                 if metadata.decision == ConfidenceDecision.ACCEPT:
@@ -203,6 +237,7 @@ def _interpret_single_note_uncached(
                 # 429: exponential backoff, retrying the same model before
                 # eventually falling through to the next chain entry.
                 last_error = exc
+                circuit_breaker.record_failure(provider_name, model, FailureKind.RATE_LIMIT_429)
                 logger.warning(
                     "Provider '%s' quota/429 on note %d attempt %d/%d, exponential backoff: %s",
                     provider_name,
@@ -211,13 +246,14 @@ def _interpret_single_note_uncached(
                     MAX_ATTEMPTS,
                     exc,
                 )
-                if attempt < MAX_ATTEMPTS:
+                if attempt < MAX_ATTEMPTS and time.monotonic() < deadline:
                     time.sleep(EXPONENTIAL_BACKOFF_BASE_SECONDS * (2 ** (attempt - 1)))
                 continue
             except LLMTimeoutError as exc:
                 # Timeout: no retry on this model at all — move to the next
                 # model immediately, a hanging provider won't suddenly speed up.
                 last_error = exc
+                circuit_breaker.record_failure(provider_name, model, FailureKind.TIMEOUT)
                 logger.warning(
                     "Provider '%s' timed out on note %d, moving to next model immediately: %s",
                     provider_name,
@@ -229,6 +265,7 @@ def _interpret_single_note_uncached(
                 # 5xx: short, flat retry (transient upstream blip, not worth
                 # a growing backoff).
                 last_error = exc
+                circuit_breaker.record_failure(provider_name, model, FailureKind.SERVER_ERROR_5XX)
                 logger.warning(
                     "Provider '%s' returned a server error on note %d attempt %d/%d, short retry: %s",
                     provider_name,
@@ -237,12 +274,13 @@ def _interpret_single_note_uncached(
                     MAX_ATTEMPTS,
                     exc,
                 )
-                if attempt < MAX_ATTEMPTS:
+                if attempt < MAX_ATTEMPTS and time.monotonic() < deadline:
                     time.sleep(SHORT_RETRY_BACKOFF_SECONDS)
                 continue
             except LLMProviderError as exc:
                 # Any other provider-side failure (e.g. a permanent 4xx
-                # configuration error): unchanged flat linear backoff.
+                # configuration error): unchanged flat linear backoff. Not
+                # recorded in the circuit breaker — see FailureKind.OTHER.
                 last_error = exc
                 logger.warning(
                     "Provider '%s' error on note %d attempt %d/%d: %s",
@@ -252,7 +290,7 @@ def _interpret_single_note_uncached(
                     MAX_ATTEMPTS,
                     exc,
                 )
-                if attempt < MAX_ATTEMPTS:
+                if attempt < MAX_ATTEMPTS and time.monotonic() < deadline:
                     time.sleep(RETRY_BACKOFF_SECONDS * attempt)
                 continue
             except (ValueError, TypeError, json.JSONDecodeError, ValidationError) as exc:

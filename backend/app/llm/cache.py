@@ -40,7 +40,7 @@ def build_directive_context(
         "models": models,
         "date": date.today().isoformat(),
         "prompt_hash": hashlib.sha256(SYSTEM_PROMPT.encode("utf-8")).hexdigest(),
-        "policy_version": 1,
+        "policy_version": 2,
     }
 
 

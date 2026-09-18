@@ -195,6 +195,7 @@ def test_concurrent_notes_have_independent_metadata(monkeypatch):
 
 
 def test_api_schema_and_response_do_not_expose_metadata_and_verifier_still_runs(monkeypatch):
+    monkeypatch.setattr(optimize, "interpret_operator_notes", interpreter.interpret_operator_notes)
     monkeypatch.setattr(interpreter, "get_provider_chain",
                         lambda: [("provider", Model("a", output())), ("provider", Model("b", output()))])
     verified = []

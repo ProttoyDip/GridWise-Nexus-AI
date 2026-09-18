@@ -84,7 +84,8 @@ def score_output(raw, expected: dict, note_index: int) -> dict:
     return scores
 
 
-def evaluate_model(provider_name: str, model_name: str, cases: list[dict], timeout: float) -> dict:
+def evaluate_model(provider_name: str, model_name: str, cases: list[dict], timeout: float,
+                   *, system_prompt: str = SYSTEM_PROMPT, structured_output: bool = True) -> dict:
     api_key = os.getenv(f"LLM_API_KEY_{provider_name.upper()}", "").strip() or os.getenv("LLM_API_KEY", "").strip()
     summary = {"provider": provider_name, "model": model_name, "status": "completed", "results": []}
     if not api_key:
@@ -100,15 +101,15 @@ def evaluate_model(provider_name: str, model_name: str, cases: list[dict], timeo
             start = time.perf_counter()
             try:
                 prompt = build_user_prompt(scenario.operator_notes[index], index, scenario.hours, scenario.battery)
-                if getattr(model, "supports_structured_output", False):
+                if structured_output and getattr(model, "supports_structured_output", False):
                     row["native_requested"] = True
                     try:
-                        raw = model.complete_structured(SYSTEM_PROMPT, prompt, directive_json_schema())
+                        raw = model.complete_structured(system_prompt, prompt, directive_json_schema())
                     except StructuredOutputUnsupported:
                         row["text_fallback"] = True
-                        raw = model.complete(SYSTEM_PROMPT, prompt)
+                        raw = model.complete(system_prompt, prompt)
                 else:
-                    raw = model.complete(SYSTEM_PROMPT, prompt)
+                    raw = model.complete(system_prompt, prompt)
                 row.update(score_output(raw, expected, index))
             except (LLMProviderError, ValueError, TypeError, RecursionError, OverflowError) as exc:
                 # Store categories only; provider bodies can echo credentials.
@@ -223,6 +224,12 @@ def main():
             print(f"[{len(models)}/{len(candidates)}] {model['provider']}/{model['model']}: {model['status']}, full={metrics['fully_correct_rate']}, errors={metrics['error_count']}", flush=True)
     metadata["complete"] = True
     report = write_report(args.output, models, metadata)
+    # Refresh the demo's packaged metrics only after the full evaluation.
+    from scripts.build_demo_benchmarks import publish_report
+    try:
+        publish_report(args.output)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        print(f"Demo benchmark refresh failed ({type(exc).__name__}); evaluation report retained.", flush=True)
     if args.apply_defaults:
         if not report["defaults"]["provider_models"]:
             parser.exit(1, "No model meets default-selection thresholds; existing defaults retained.\n")

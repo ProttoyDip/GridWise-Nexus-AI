@@ -196,7 +196,8 @@ def test_kwh_field_uses_relative_tolerance(wiring):
     )
     arbiter = _register(wiring, ARBITER_SPEC, [])
 
-    result = consensus_module.interpret_note_with_consensus("keep half the battery", 0, HOURS, BATTERY)
+    config = BATTERY.model_copy(update={"capacity_kwh": 1000})
+    result = consensus_module.interpret_note_with_consensus("keep half the battery", 0, HOURS, config)
 
     assert arbiter.calls == 0
     assert result.structured_adjustment["minimum_energy_kwh"] == 500

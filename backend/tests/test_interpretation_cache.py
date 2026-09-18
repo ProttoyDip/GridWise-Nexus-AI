@@ -240,6 +240,8 @@ def test_no_api_keys_or_provider_objects_are_stored(clock_cache):
 
 
 def test_repeated_api_requests_use_cache_without_response_fields(clock_cache, monkeypatch):
+    from app.api import optimize
+    monkeypatch.setattr(optimize, "interpret_operator_notes", interpreter.interpret_operator_notes)
     model = Model()
     monkeypatch.setattr(interpreter, "get_provider_chain", lambda: [("test", model)])
     scenario = ScenarioRequest(scenario_id="first", operator_notes=["same note"], hours=forecast(), battery=battery())

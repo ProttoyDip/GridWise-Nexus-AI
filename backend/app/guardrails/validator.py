@@ -6,14 +6,67 @@ in [0,1], non-negative reserve/grid-cap values), and applies semantics
 (no_op => applies=False, all others => applies=True) per Problem
 Statement Section 08. Must fail safe (fallback to no_op) rather than
 raise on malformed model output.
+
+When the LLM provides a ``time_expression`` string alongside (or instead
+of) the ``hours`` array, ``normalize_directive_hours`` replaces the hours
+with the deterministic output of the time-expression normalizer. This
+guarantees that the LLM alone never decides the final hour list.
 """
 
 from __future__ import annotations
 
+import logging
 import math
 from typing import Any, get_args
 
 from app.models.response import DirectiveInterpretation, DirectiveType
+from app.models.request import BatteryConfig
+from app.normalizer.time_parser import normalize_time_expression
+
+logger = logging.getLogger(__name__)
+
+
+def normalize_directive_hours(data: dict[str, Any]) -> dict[str, Any]:
+    """Replace LLM-provided hours with deterministic normalizer output.
+
+    If ``structured_adjustment`` contains a ``time_expression`` string,
+    the normalizer converts it into a concrete hour list and overwrites
+    ``hours``. The ``time_expression`` key is then removed so downstream
+    validation sees a clean ``hours`` array.
+
+    If no ``time_expression`` is present, the directive is returned
+    unchanged — the existing ``hours`` array (if any) passes through to
+    normal guardrail validation.
+
+    This function never raises; parse failures are logged and the
+    ``time_expression`` key is removed, leaving validation to reject
+    the directive on a missing or bad ``hours`` array.
+    """
+    adjustment = data.get("structured_adjustment")
+    if not isinstance(adjustment, dict):
+        return data
+
+    time_expr = adjustment.pop("time_expression", None)
+    if not time_expr or not isinstance(time_expr, str):
+        return data
+
+    try:
+        hours = normalize_time_expression(time_expr)
+        adjustment["hours"] = hours
+        logger.info(
+            "Normalized time expression %r → hours %s",
+            time_expr,
+            hours,
+        )
+    except ValueError as exc:
+        logger.warning(
+            "Failed to normalize time expression %r: %s — "
+            "leaving hours for downstream validation to reject",
+            time_expr,
+            exc,
+        )
+
+    return data
 
 
 def _check_directive(data: dict[str, Any], note_index: int) -> None:
@@ -63,6 +116,7 @@ def validate_directive(
     data = directive.model_dump() if isinstance(directive, DirectiveInterpretation) else directive
     if not isinstance(data, dict):
         raise ValueError("directive must be an object")
+    normalize_directive_hours(data)
     _check_directive(data, note_index)
     result = DirectiveInterpretation.model_validate(data, strict=True)
     if isinstance(directive, DirectiveInterpretation):
@@ -72,6 +126,7 @@ def validate_directive(
 
 def validate_directive_interpretation(
     directives: list[dict[str, Any] | DirectiveInterpretation],
+    battery: BatteryConfig | None = None,
 ) -> list[DirectiveInterpretation]:
     """Validate decoded LLM output or interpreter results without mutating them.
 
@@ -79,8 +134,13 @@ def validate_directive_interpretation(
     safe no_op directives at the same position; valid entries retain their
     content. Every result is freshly validated, including supplied model
     instances. Bounds are intrinsic: factor in [0, 1], finite non-negative
-    energy values. Scenario feasibility belongs to the optimizer/verifier.
+    energy values. With battery context, apply conservative corrections and
+    physical bounds before schema validation. Overall schedule feasibility
+    still belongs to the optimizer/verifier.
     """
+    if battery is not None:
+        from app.guardrails.physics_validator import validate_physical_directives
+        return validate_physical_directives(directives, battery)
     validated = []
     for note_index, directive in enumerate(directives):
         try:

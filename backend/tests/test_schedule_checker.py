@@ -139,14 +139,14 @@ def test_real_solver_decimal_schedule_passes_verification():
 
 def test_api_returns_verified_directive_compliant_schedule(monkeypatch):
     scenario, _ = example()
-    directives = validated("solar_reduction", list(range(24)), factor=0)
+    directives = validated("solar_reduction", list(range(24)), factor=0.2)
     monkeypatch.setattr(optimize, "interpret_operator_notes", lambda *args: directives)
     result = TestClient(app).post("/optimize-energy", json=scenario.model_dump())
     assert result.status_code == 200
     response = OptimizeResponse.model_validate(result.json())
     verify_schedule(scenario, response)
-    assert all(entry.solar_used_kwh == 0 for entry in response.hourly_plan)
-    assert response.total_cost_bdt == pytest.approx(1200)
+    assert all(entry.solar_used_kwh <= 0.2 + 1e-6 for entry in response.hourly_plan)
+    assert response.total_cost_bdt == pytest.approx(1176)
 
 
 def test_api_guardrails_invalid_interpretation_before_optimization(monkeypatch):
