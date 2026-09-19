@@ -7,6 +7,8 @@ export type CopilotIntent =
   | "EXPLANATION_REQUEST"
   | "SIMULATION_REQUEST"
   | "STATUS_REQUEST"
+  | "SCHEDULE_REQUEST"
+  | "APP_HELP_REQUEST"
   | "GENERAL_ENERGY_QUERY";
 
 export interface DirectiveCard {

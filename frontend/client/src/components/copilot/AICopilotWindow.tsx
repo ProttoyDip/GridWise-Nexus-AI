@@ -1,8 +1,9 @@
 import { motion } from "framer-motion";
-import { CheckCircle2, Loader2, Send, X, Zap } from "lucide-react";
+import { CheckCircle2, Loader2, Mic, MicOff, Send, X, Zap } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import ChatMessage from "./ChatMessage";
 import QuickActions from "./QuickActions";
+import { useSpeechInput } from "./useSpeechInput";
 import { PROCESSING_STEPS } from "./useCopilotChat";
 import type { ChatMessageData, CopilotStatus } from "./types";
 
@@ -40,6 +41,7 @@ function ProcessingTimeline({ step }: { step: number }) {
 export default function AICopilotWindow({ messages, status, processingStep, onSend, onClose }: AICopilotWindowProps) {
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const voice = useSpeechInput(setDraft);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -48,6 +50,7 @@ export default function AICopilotWindow({ messages, status, processingStep, onSe
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!draft.trim() || status === "processing") return;
+    voice.stop();
     onSend(draft);
     setDraft("");
   };
@@ -108,16 +111,30 @@ export default function AICopilotWindow({ messages, status, processingStep, onSe
         <QuickActions onSelect={onSend} disabled={status === "processing"} />
       </div>
 
+      {voice.error && <p role="alert" className="px-4 pt-2 text-[11px] text-amber-300">{voice.error}</p>}
+
       {/* Message input */}
       <form onSubmit={handleSubmit} className="flex items-center gap-2 border-t border-white/10 px-3 py-2.5">
         <input
           type="text"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder="Ask GridWise AI..."
+          placeholder={voice.listening ? "Listening..." : "Ask GridWise AI..."}
           disabled={status === "processing"}
           className="flex-1 rounded-full border border-white/10 bg-black/30 px-3.5 py-2 text-[13px] text-slate-100 placeholder:text-slate-500 outline-none focus:border-cyan-400/50 disabled:opacity-50"
         />
+        {voice.supported && (
+          <button
+            type="button"
+            onClick={voice.listening ? voice.stop : voice.start}
+            disabled={status === "processing"}
+            aria-label={voice.listening ? "Stop voice input" : "Start voice input"}
+            aria-pressed={voice.listening}
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-colors disabled:opacity-40 ${voice.listening ? "animate-pulse border-rose-400/60 bg-rose-500/20 text-rose-300" : "border-white/10 bg-black/30 text-slate-300 hover:text-cyan-300"}`}
+          >
+            {voice.listening ? <MicOff size={15} /> : <Mic size={15} />}
+          </button>
+        )}
         <button
           type="submit"
           disabled={!draft.trim() || status === "processing"}

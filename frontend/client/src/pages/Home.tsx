@@ -7,6 +7,7 @@ import { AgentStatusPanel } from "@/components/AgentStatusPanel";
 import { BeforeAfterComparison } from "@/components/BeforeAfterComparison";
 import { optimizeWithProgress, type StageMap } from "@/lib/optimizeStream";
 import { AlertsPanel } from "@/components/AlertsPanel";
+import { setCopilotContext } from "@/lib/copilotContext";
 import { ImpactSummary } from "@/components/ImpactSummary";
 import { RunHistory } from "@/components/RunHistory";
 import { addRun, loadRuns, makeRun, saveRuns, type RunRecord } from "@/lib/history";
@@ -75,6 +76,7 @@ export default function Home() {
   const [health, setHealth] = useState<"checking" | "connected" | "disconnected">("checking");
   const [lastHealthCheck, setLastHealthCheck] = useState<Date | null>(null);
   const [activeTab, setActiveTab] = useState<"dashboard" | "twin">("dashboard");
+  useEffect(() => { setCopilotContext(scenario); }, [scenario]);
   const [stages, setStages] = useState<StageMap>({});
   const [runs, setRuns] = useState<RunRecord[]>(() => loadRuns());
   const insights = useSchedulerInsights(API_BASE, scenario, result);

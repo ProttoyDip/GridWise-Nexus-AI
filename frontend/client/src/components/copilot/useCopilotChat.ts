@@ -1,3 +1,4 @@
+import { getCopilotContext } from "@/lib/copilotContext";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessageData, CopilotChatResponse, CopilotStatus } from "./types";
 
@@ -112,7 +113,7 @@ export function useCopilotChat() {
         body: JSON.stringify({
           session_id: sessionIdRef.current,
           message: trimmed,
-          context: context ?? null,
+          context: context ?? getCopilotContext(),
         }),
         signal: AbortSignal.timeout(120_000),
       });

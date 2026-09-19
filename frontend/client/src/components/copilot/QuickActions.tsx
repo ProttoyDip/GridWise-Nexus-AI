@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Activity, MessageCircleQuestion, Sparkles, Zap } from "lucide-react";
+import { Activity, CalendarClock, CircleHelp, MessageCircleQuestion, Sparkles, Zap } from "lucide-react";
 
 interface QuickAction {
   label: string;
@@ -11,6 +11,8 @@ const ACTIONS: QuickAction[] = [
   { label: "Optimize Energy", message: "Optimize the current energy scenario", icon: <Zap size={14} /> },
   { label: "Explain Schedule", message: "Why did you choose this schedule?", icon: <MessageCircleQuestion size={14} /> },
   { label: "Simulate Scenario", message: "What if solar drops by 50%?", icon: <Sparkles size={14} /> },
+  { label: "Today's Actions", message: "What should I do today?", icon: <CalendarClock size={14} /> },
+  { label: "How to use", message: "How do I use this app?", icon: <CircleHelp size={14} /> },
   { label: "System Status", message: "Is the system healthy?", icon: <Activity size={14} /> },
 ];
 
