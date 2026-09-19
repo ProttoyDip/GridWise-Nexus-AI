@@ -92,6 +92,21 @@ def handle_message(session_id: str, message: str, context: dict[str, Any] | None
                 session_id, result["scenario"], result["directives"], result["plan"], {}
             )
 
+    elif intent is Intent.SCHEDULE_REQUEST:
+        result = tools.get_action_schedule(message, context)
+        if result.get("ok"):
+            lines = [f"{a['start_time']}-{a['end_time']}  {a['type'].replace('_', ' ').title()} - {a['reason']}" for a in result["actions"]]
+            text = "Recommended actions for today:\n" + "\n".join(lines) if lines else "No special actions are needed today."
+            reply = {"reply": text, "action_taken": "get_action_schedule", "visual_data": {"actions": result["actions"]}}
+        else:
+            reply = {"reply": "I couldn't build an action schedule right now.", "action_taken": "get_action_schedule_failed", "visual_data": None}
+
+    elif intent is Intent.APP_HELP_REQUEST:
+        import re as _re
+
+        secret = _re.search(r"prompt|api key|env", message.casefold())
+        reply = {"reply": tools.SECRET_REFUSAL if secret else tools.APP_GUIDE, "action_taken": "explain_application_usage", "visual_data": None}
+
     elif intent is Intent.STATUS_REQUEST:
         result = tools.system_status()
         reply = replies.status_reply(result)

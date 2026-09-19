@@ -14,7 +14,7 @@ export default function AICopilotBubble({ status, unreadCount, isOpen, onClick }
   const [showTooltip, setShowTooltip] = useState(false);
 
   return (
-    <div className="fixed bottom-5 right-5 z-[60] flex flex-col items-end gap-2">
+    <div className={`fixed bottom-5 right-5 z-[60] flex flex-col items-end gap-2 ${isOpen ? "max-sm:hidden" : ""}`}>
       <AnimatePresence>
         {showTooltip && !isOpen && (
           <motion.div

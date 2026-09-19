@@ -52,17 +52,17 @@ export function BeforeAfterComparison({ apiBase, scenario, result }: { apiBase: 
   return (
     <section className="glass-card comparison-panel">
       <div className="panel-heading compact-heading">
-        <div><div className="eyebrow"><span className="eyebrow-dot mint" /> Before vs after</div><h2>Operator directives vs a neutral baseline</h2></div>
+        <div><div className="eyebrow"><span className="eyebrow-dot mint" /> Constraint impact</div><h2>Constraint Impact Analysis</h2></div>
         {state === "ready" && savingsPct !== 0 && (
-          <span className={`live-tag ${savingsPct > 0 ? "" : "applies-no"}`}><TrendingDown size={12} /> {savingsPct > 0 ? `${savingsPct.toFixed(1)}% lower cost` : `${Math.abs(savingsPct).toFixed(1)}% higher cost`}</span>
+          <span className="live-tag"><TrendingDown size={12} /> {savingsPct > 0 ? `${savingsPct.toFixed(1)}% lower cost` : `+${Math.abs(savingsPct).toFixed(1)}% cost for operational compliance`}</span>
         )}
       </div>
 
       {(state === "idle" || state === "error") && (
         <div className="comparison-prompt">
-          <p>{state === "error" ? "Couldn't reach the API for a baseline run. Try again." : "Runs one extra optimization with directives cleared, so you can see exactly what they changed."}</p>
+          <p>{state === "error" ? "Couldn't reach the API for a baseline run. Try again." : "Baseline is the theoretical minimum cost without operational restrictions. GridWise is the lowest-cost feasible plan that respects your real-world constraints."}</p>
           <button type="button" className="button button-outline" onClick={runComparison}>
-            <Scale size={14} /> Compare against baseline
+            <Scale size={14} /> Analyze constraint impact
           </button>
         </div>
       )}
@@ -72,13 +72,13 @@ export function BeforeAfterComparison({ apiBase, scenario, result }: { apiBase: 
       {state === "ready" && baseline && (
         <motion.div className="comparison-grid" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
           <div className="comparison-col">
-            <span className="stat-label">Baseline (no directives)</span>
+            <span className="stat-label">Baseline (unrestricted minimum)</span>
             <strong>{baseline.total_cost_bdt.toLocaleString()} <small>BDT</small></strong>
             <small>{baseline.total_grid_kwh.toLocaleString()} kWh grid draw · {baseline.peak_grid_kwh.toLocaleString()} kWh peak</small>
           </div>
           <ArrowRight size={18} className="comparison-arrow" />
           <div className="comparison-col comparison-col-highlight">
-            <span className="stat-label">With operator directives</span>
+            <span className="stat-label">GridWise (constraints satisfied ✓)</span>
             <strong>{result.total_cost_bdt.toLocaleString()} <small>BDT</small></strong>
             <small>{result.total_grid_kwh.toLocaleString()} kWh grid draw · {result.peak_grid_kwh.toLocaleString()} kWh peak · {gridDelta <= 0 ? "" : "+"}{gridDelta.toFixed(0)} kWh vs baseline</small>
           </div>

@@ -1,7 +1,7 @@
 """Copilot tool wrappers.
 
 Every function here calls an *existing* GridWise service directly (plain
-Python function calls, not HTTP round-trips) — this module adds no new
+Python function calls, not HTTP round-trips) â€” this module adds no new
 optimization, interpretation, simulation, or explanation logic of its
 own. Each tool returns a plain, JSON-safe dict and never raises: a tool
 failure is reported as ``{"ok": False, "error": ...}`` so the agent can
@@ -10,7 +10,7 @@ still produce a graceful chat reply instead of a 500.
 Imports of the underlying GridWise modules are deferred into each
 function body (not module-level) to avoid import-order/circularity
 issues with app.api.optimize, which itself imports from app.llm and
-app.optimizer — the same lazy-import pattern app/demo/routes.py already
+app.optimizer â€” the same lazy-import pattern app/demo/routes.py already
 uses for the same reason.
 """
 
@@ -31,7 +31,7 @@ DEFAULT_SCENARIO_ID = "COPILOT-SESSION"
 
 def _default_hours() -> list[dict]:
     """A fixed, illustrative 24h forecast used only when the dashboard
-    hasn't supplied its own current scenario via `context` — never
+    hasn't supplied its own current scenario via `context` â€” never
     presented as a real forecast, only as a basis for a demo/standalone
     Copilot response."""
     return [
@@ -59,7 +59,7 @@ def build_scenario(operator_note: str, context: dict[str, Any] | None) -> "Scena
     """Build a ScenarioRequest for a tool call.
 
     `context`, when supplied by the dashboard, may carry
-    {"scenario_id", "hours", "battery"} — the same shape as
+    {"scenario_id", "hours", "battery"} â€” the same shape as
     /optimize-energy's request body minus operator_notes, which always
     comes from the user's actual chat message so the Copilot never
     invents an operating instruction the user didn't give. Missing
@@ -82,7 +82,7 @@ def build_scenario(operator_note: str, context: dict[str, Any] | None) -> "Scena
 
 
 def optimize_energy(operator_note: str, context: dict[str, Any] | None) -> dict[str, Any]:
-    """Tool: optimize_energy() — reuses the real /optimize-energy pipeline
+    """Tool: optimize_energy() â€” reuses the real /optimize-energy pipeline
     (interpretation, guardrails, solver, verifier) end to end."""
     from app.api.optimize import optimize_energy as _optimize_energy
 
@@ -109,7 +109,7 @@ def explain_schedule(
     directives: "list[DirectiveInterpretation] | None",
     plan: "list[HourlyPlanEntry] | None",
 ) -> dict[str, Any]:
-    """Tool: explain_schedule() — reuses the existing explainability
+    """Tool: explain_schedule() â€” reuses the existing explainability
     generator against an already-computed result. Never fabricates an
     explanation independent of a real optimization."""
     if scenario is None or directives is None or plan is None:
@@ -153,7 +153,7 @@ def simulate_scenario(
     base_directives: "list[DirectiveInterpretation] | None" = None,
     base_plan: "list[HourlyPlanEntry] | None" = None,
 ) -> dict[str, Any]:
-    """Tool: simulate_scenario() — reuses the existing digital-twin
+    """Tool: simulate_scenario() â€” reuses the existing digital-twin
     simulator (app.simulation.simulator.simulate) to compare the current
     plan against stress-test futures. If no prior optimization exists in
     this session, first runs optimize_energy() to establish a nominal
@@ -181,7 +181,7 @@ def simulate_scenario(
 
 
 def system_status() -> dict[str, Any]:
-    """Tool: system_status() — reuses the real GET /system/status handler."""
+    """Tool: system_status() â€” reuses the real GET /system/status handler."""
     from app.api.system_status import get_system_status
 
     try:
@@ -189,3 +189,24 @@ def system_status() -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         logger.warning("Copilot system_status tool failed (%s): %s", type(exc).__name__, exc)
         return {"ok": False, "error": str(exc)}
+
+
+def get_action_schedule(operator_note: str, context: dict[str, Any] | None) -> dict[str, Any]:
+    """Tool: get_action_schedule() — optimizes, then converts the plan into operator actions."""
+    from app.scheduler import generate_daily_actions
+
+    primary = optimize_energy(operator_note, context)
+    if not primary["ok"]:
+        return primary
+    payload = primary["scenario"].model_dump()
+    actions = generate_daily_actions(primary["plan"], payload["hours"], payload["battery"])
+    return {**primary, "actions": actions["daily_actions"]}
+
+
+APP_GUIDE = (
+    "GridWise turns operator instructions into optimized energy schedules. Set a directive in the "
+    "Operator command center, press Run optimization, then review the AI Action Schedule for what to do "
+    "and when, and Why AI Decided This for the reasoning. The Digital Twin tab simulates scenarios such as "
+    "a solar drop. I can also optimize, explain, simulate, or check system status."
+)
+SECRET_REFUSAL = "I can help explain how GridWise works, but I cannot provide internal configuration details."

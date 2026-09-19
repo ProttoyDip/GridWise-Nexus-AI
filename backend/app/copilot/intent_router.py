@@ -24,6 +24,8 @@ class Intent(str, Enum):
     EXPLANATION_REQUEST = "EXPLANATION_REQUEST"
     SIMULATION_REQUEST = "SIMULATION_REQUEST"
     STATUS_REQUEST = "STATUS_REQUEST"
+    SCHEDULE_REQUEST = "SCHEDULE_REQUEST"
+    APP_HELP_REQUEST = "APP_HELP_REQUEST"
     GENERAL_ENERGY_QUERY = "GENERAL_ENERGY_QUERY"
 
 
@@ -56,6 +58,24 @@ _STATUS_PATTERNS = [
     r"\bhealth ?check\b",
 ]
 
+_SCHEDULE_PATTERNS = [
+    r"\bwhat should i do\b",
+    r"\baction (plan|schedule)\b",
+    r"\bwhat (actions?|steps?)\b",
+    r"\bwhen should i\b",
+]
+
+_APP_HELP_PATTERNS = [
+    r"\bhow (do|can) i use\b",
+    r"\bwhat can (i|you) do\b",
+    r"\bhow does (this|gridwise)\b",
+    r"\bwhere (can|do) i (see|find)\b",
+    r"\bhelp (me )?(use|understand|navigate)\b",
+    r"\buser guide\b",
+]
+
+_SECRET_PATTERNS = [r"\bsystem prompt\b", r"\bapi keys?\b", r"\benv(ironment)? var", r"\binternal prompt"]
+
 _OPTIMIZATION_PATTERNS = [
     r"\boptimi[sz]e",
     r"\breduce\b.{0,20}\bcost\b",
@@ -79,6 +99,10 @@ def classify_intent(message: str) -> Intent:
     if not text:
         return Intent.GENERAL_ENERGY_QUERY
 
+    if _matches_any(_SECRET_PATTERNS, text) or _matches_any(_APP_HELP_PATTERNS, text):
+        return Intent.APP_HELP_REQUEST
+    if _matches_any(_SCHEDULE_PATTERNS, text):
+        return Intent.SCHEDULE_REQUEST
     if _matches_any(_EXPLANATION_PATTERNS, text):
         return Intent.EXPLANATION_REQUEST
     if _matches_any(_SIMULATION_PATTERNS, text):

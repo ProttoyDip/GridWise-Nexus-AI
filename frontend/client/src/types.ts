@@ -53,3 +53,12 @@ export type OptimizeResponse = {
   peak_grid_kwh: number;
   plan_summary: string;
 };
+
+export type ScheduledAction = {
+  type: string;
+  start_time: string;
+  end_time: string;
+  priority: "HIGH" | "MEDIUM" | "LOW" | string;
+  reason: string;
+  expected_impact: string;
+};

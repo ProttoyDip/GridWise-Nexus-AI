@@ -1,6 +1,8 @@
 import { motion } from "framer-motion";
-import { AlertTriangle, ArrowRight, Clock3, Cpu, LayoutDashboard, Loader2, Network, Play, RadarIcon, RefreshCw, ShieldCheck, Sparkles, Terminal, Zap } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock3, Cpu, LayoutDashboard, Loader2, Moon, Network, Play, RadarIcon, RefreshCw, ShieldCheck, Sparkles, Sun, Terminal, Zap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { ActionSchedule } from "@/components/ActionSchedule";
+import { PipelineFlow, ReliabilityPanel } from "@/components/ControlCenterPanels";
 import { AgentStatusPanel } from "@/components/AgentStatusPanel";
 import { BeforeAfterComparison } from "@/components/BeforeAfterComparison";
 import { DigitalTwinTab } from "@/components/DigitalTwinTab";
@@ -68,6 +70,15 @@ export default function Home() {
   const [health, setHealth] = useState<"checking" | "connected" | "disconnected">("checking");
   const [lastHealthCheck, setLastHealthCheck] = useState<Date | null>(null);
   const [activeTab, setActiveTab] = useState<"dashboard" | "twin">("dashboard");
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    try { return localStorage.getItem("gridwise-theme") === "light" ? "light" : "dark"; } catch { return "dark"; }
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "light" ? "#f4f7fc" : "#0a0d15");
+    try { localStorage.setItem("gridwise-theme", theme); } catch { /* storage unavailable */ }
+  }, [theme]);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,13 +158,13 @@ export default function Home() {
   return <div className="app-shell">
     <div className="ambient ambient-one" /><div className="ambient ambient-two" /><div className="ambient ambient-three" />
     <header className="topbar page-width">
-      <div className="brand-lockup"><div className="brand-mark"><Zap size={18} fill="currentColor" /></div><div><div className="brand-name">GridWise <span>Nexus</span></div><div className="brand-subtitle">Energy optimization console</div></div></div>
-      <div className="topbar-right"><div className="api-endpoint"><Network size={14} /><span>{API_BASE}</span></div><div className={`connection-pill ${health}`}><span className="status-dot" />{healthCopy}</div><button className="icon-button top-icon" type="button" title="Refresh connection" onClick={() => window.location.reload()}><RefreshCw size={15} /></button></div>
+      <div className="brand-lockup"><div className="brand-mark"><Zap size={18} fill="currentColor" /></div><div><div className="brand-name">GridWise <span>Nexus</span></div><div className="brand-subtitle">AI operations center</div></div></div>
+      <div className="topbar-right"><div className="api-endpoint"><Network size={14} /><span>{API_BASE}</span></div><div className={`connection-pill ${health}`}><span className="status-dot" />{healthCopy}</div><button className="theme-toggle" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title={theme === "dark" ? "Light mode" : "Dark mode"}>{theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}</button><button className="icon-button top-icon" type="button" title="Refresh connection" onClick={() => window.location.reload()}><RefreshCw size={15} /></button></div>
     </header>
 
     <main className="page-width main-content">
       <section className="hero-row">
-        <div className="hero-copy"><div className="hero-kicker"><span className="kicker-line" /> LIVE OPERATOR WORKSPACE <span className="kicker-line" /></div><h1>Turn intent into <span>optimal dispatch.</span></h1><p>Run high-fidelity energy scenarios against your optimization API. Edit the operating envelope, encode what matters, and inspect every decision.</p></div>
+        <div className="hero-copy"><div className="hero-kicker"><span className="kicker-line" /> AI ENERGY OPERATIONS CONTROL CENTER <span className="kicker-line" /></div><h1>Instruct. Optimize. <span>Act with confidence.</span></h1><p>Run high-fidelity energy scenarios against your optimization API. Edit the operating envelope, encode what matters, and inspect every decision.</p></div>
         <div className="hero-health"><div className="health-orbit"><div className="orbit-ring ring-one" /><div className="orbit-ring ring-two" /><div className="orbit-core"><Cpu size={21} /></div></div><div><span>Model interface</span><strong>{health === "connected" ? "Ready for inference" : health === "checking" ? "Checking signal" : "Offline mode"}</strong><small>{lastHealthCheck ? `Last checked ${lastHealthCheck.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Polling every 6 sec"}</small></div></div>
       </section>
 
@@ -196,10 +207,15 @@ export default function Home() {
           {result && !loading && (
             <div className="insight-grid">
               <div className="insight-col">
+                <ActionSchedule apiBase={API_BASE} scenario={scenario} refreshKey={result} />
                 <BeforeAfterComparison apiBase={API_BASE} scenario={scenario} result={result} />
                 <WhyAIDecided result={result} />
               </div>
-              <AgentStatusPanel loading={loading} hasResult={Boolean(result)} hasError={Boolean(error)} />
+              <div className="insight-col">
+                <AgentStatusPanel loading={loading} hasResult={Boolean(result)} hasError={Boolean(error)} />
+                <PipelineFlow complete={Boolean(result) && !error} running={loading} />
+                <ReliabilityPanel />
+              </div>
             </div>
           )}
         </>
