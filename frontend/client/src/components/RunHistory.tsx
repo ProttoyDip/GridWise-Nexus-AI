@@ -18,7 +18,7 @@ export function RunHistory({ runs, onClear }: { runs: RunRecord[]; onClear: () =
   const deltas = a && b ? compareRuns(a, b) : null;
 
   return (
-    <section className="glass-card history-panel">
+    <section className="glass-card history-panel" id="sec-history">
       <div className="panel-heading compact-heading">
         <div><div className="eyebrow"><span className="eyebrow-dot violet" /> Run history</div><h2>Compare past runs</h2><p>Select any two runs to compare them side by side.</p></div>
         <button type="button" className="button button-quiet" onClick={onClear}><Trash2 size={14} /> Clear</button>

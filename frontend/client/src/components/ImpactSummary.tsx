@@ -14,7 +14,7 @@ export function ImpactSummary({ scenario, result }: { scenario: Scenario; result
     { icon: <Sun size={16} />, tone: "orange", label: "Solar utilised", value: `${impact.solarUsedPct.toFixed(0)}%`, meta: "of forecast generation" },
   ];
   return (
-    <section className="glass-card impact-panel">
+    <section className="glass-card impact-panel" id="sec-impact">
       <div className="panel-heading compact-heading">
         <div><div className="eyebrow"><span className="eyebrow-dot mint" /> Business impact</div><h2>Savings &amp; carbon</h2><p>Compared with buying every kWh from the grid, with no solar or battery.</p></div>
       </div>

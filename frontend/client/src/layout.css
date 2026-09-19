@@ -1,0 +1,71 @@
+/* Layout rhythm: consistent tab spacing, split panels, sticky navigation, less scrolling. */
+
+/* `clip` (unlike `hidden`) doesn't create a scroll container, so sticky children keep working. */
+.app-shell { overflow: clip; }
+
+/* One vertical rhythm for whatever follows the tab strip, in every tab. */
+.tab-strip { margin: 22px 0 0; }
+.status-bar { margin-left: 0; margin-right: 0; }
+.main-content > .tab-strip + * { margin-top: 16px; }
+.footer { margin-top: 24px; }
+
+/* Tool tabs: the tool on the left, the scenario it runs against on the right. */
+.tab-split { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(290px, 1fr); gap: 16px; align-items: start; }
+.tab-split > .twin-panel, .tab-split > .outage-planner, .tab-split > .snapshot-panel { margin-top: 0; }
+.tab-split > .snapshot-panel { position: sticky; top: 16px; }
+@media (max-width: 1100px) { .tab-split { grid-template-columns: minmax(0, 1fr); } .tab-split > .snapshot-panel { position: static; } }
+
+.snapshot-panel { padding: 20px 22px; }
+.snapshot-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.snapshot-stats > div { display: grid; grid-template-columns: auto 1fr; column-gap: 9px; align-items: center; padding: 10px 11px; border: 1px solid rgba(121, 137, 183, .14); border-radius: 10px; background: rgba(8, 13, 23, .33); }
+.snapshot-icon { display: grid; grid-row: span 2; width: 26px; height: 26px; place-items: center; border-radius: 8px; color: var(--accent); background: rgba(124, 141, 255, .12); }
+.snapshot-mint { color: var(--ok); background: rgba(85, 230, 188, .12); }
+.snapshot-violet { color: var(--violet); background: rgba(194, 147, 255, .12); }
+.snapshot-orange { color: var(--warn); background: rgba(255, 156, 110, .12); }
+.snapshot-stats small { color: var(--muted); font: 9px "DM Mono", monospace; letter-spacing: .05em; text-transform: uppercase; }
+.snapshot-stats strong { color: #e6eaf6; font-size: 13px; font-variant-numeric: tabular-nums; }
+.snapshot-chart { display: block; width: 100%; height: auto; }
+.snap-demand { fill: rgba(124, 141, 255, .55); background: rgba(124, 141, 255, .55); }
+.snap-solar { fill: rgba(85, 230, 188, .75); background: rgba(85, 230, 188, .75); }
+.snap-tariff { stroke: #ff9c6e; stroke-width: 1.6; }
+.snap-label { fill: var(--muted); font: 8px "DM Mono", monospace; }
+.snapshot-legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 8px 0 14px; color: var(--muted); font: 10px "DM Mono", monospace; }
+.snapshot-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.snapshot-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; }
+.snapshot-legend .snap-tariff-key { height: 2px; background: #ff9c6e; border-radius: 0; }
+.snapshot-battery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; margin: 0; padding-top: 12px; border-top: 1px solid rgba(121, 137, 183, .14); }
+.snapshot-battery div { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; }
+.snapshot-battery dt { color: var(--muted); }
+.snapshot-battery dd { margin: 0; color: #cbd3e7; font: 600 11px "DM Mono", monospace; }
+html[data-theme="light"] .snapshot-stats > div { background: rgba(240, 244, 253, .8); border-color: rgba(30, 50, 100, .12); }
+html[data-theme="light"] .snapshot-stats strong, html[data-theme="light"] .snapshot-battery dd { color: #142033; }
+html[data-theme="light"] .snap-demand { fill: rgba(60, 90, 220, .5); }
+html[data-theme="light"] .snap-solar { fill: rgba(13, 150, 110, .6); }
+html[data-theme="light"] .snap-tariff { stroke: #c2521f; }
+
+/* Sticky section jump links. */
+.section-nav { position: sticky; top: 10px; z-index: 30; display: flex; gap: 6px; margin: 16px 0 0; padding: 6px; overflow-x: auto; border: 1px solid rgba(137, 151, 199, .18); border-radius: 14px; background: rgba(12, 17, 30, .84); backdrop-filter: blur(14px); scrollbar-width: none; }
+.section-nav::-webkit-scrollbar { display: none; }
+.section-chip { flex: 0 0 auto; min-height: 34px; padding: 0 13px; color: var(--muted-strong); border: 1px solid transparent; border-radius: 9px; background: transparent; font-size: 11.5px; font-weight: 700; cursor: pointer; transition: color .16s ease, background .16s ease, border-color .16s ease; }
+.section-chip:hover { color: #fff; background: rgba(124, 141, 255, .12); }
+.section-chip.is-active { color: #0b1020; background: linear-gradient(100deg, #a4b1ff, #6ce3e0); }
+html[data-theme="light"] .section-nav { background: rgba(255, 255, 255, .88); border-color: rgba(30, 50, 100, .14); }
+html[data-theme="light"] .section-chip:hover { color: #142033; background: rgba(60, 90, 220, .1); }
+#sec-plan, #sec-impact, #action-schedule, #sec-constraints, #sec-why, #sec-history { scroll-margin-top: 70px; }
+@media (max-width: 560px) { .section-nav { top: 6px; margin-left: -2px; margin-right: -2px; } }
+
+/* Keep the Run button reachable without scrolling back up (off on phones, where the copilot bubble sits there). */
+@media (min-width: 900px) {
+  .submit-bar { position: sticky; bottom: 14px; z-index: 25; box-shadow: 0 -10px 40px rgba(0, 0, 0, .28), 0 22px 70px rgba(0, 0, 0, .18); }
+}
+@media (min-width: 900px) and (max-width: 1560px) { .submit-bar { margin-right: 76px; } }
+
+/* The 24-row hourly table scrolls inside its card instead of stretching the page. */
+.table-scroll { max-height: 380px; overflow: auto; overscroll-behavior: contain; }
+.hours-table thead th { position: sticky; top: 0; z-index: 1; background: #111a2e; }
+html[data-theme="light"] .hours-table thead th { background: #eaf0fb; }
+
+/* Tab badge. */
+.tab-badge { display: inline-grid; min-width: 18px; height: 18px; place-items: center; padding: 0 5px; color: #2a1200; border-radius: 99px; background: #ffb86b; font: 800 10px "DM Mono", monospace; }
+.tab-button.is-active .tab-badge { background: #0b1020; color: #ffb86b; }
+.builder-column > * + * { margin-top: 16px; }

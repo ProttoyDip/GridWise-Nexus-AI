@@ -50,7 +50,7 @@ export function BeforeAfterComparison({ apiBase, scenario, result }: { apiBase: 
   const savingsPct = baseline && baseline.total_cost_bdt > 0 ? (-costDelta / baseline.total_cost_bdt) * 100 : 0;
 
   return (
-    <section className="glass-card comparison-panel">
+    <section className="glass-card comparison-panel" id="sec-constraints">
       <div className="panel-heading compact-heading">
         <div><div className="eyebrow"><span className="eyebrow-dot mint" /> Constraint impact</div><h2>Constraint Impact Analysis</h2></div>
         {state === "ready" && savingsPct !== 0 && (

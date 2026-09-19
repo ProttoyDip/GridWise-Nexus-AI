@@ -1,12 +1,15 @@
 import { motion } from "framer-motion";
-import { AlertTriangle, ArrowRight, Clock3, Cpu, LayoutDashboard, Loader2, Moon, Play, RadarIcon, RefreshCw, ShieldCheck, Sparkles, Sun, Terminal, Zap } from "lucide-react";
+import { AlertTriangle, BellRing, ArrowRight, Clock3, Cpu, LayoutDashboard, Loader2, Moon, Play, RadarIcon, RefreshCw, ShieldCheck, Sparkles, Sun, Terminal, Zap } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { ActionSchedule, useSchedulerInsights } from "@/components/ActionSchedule";
 import { PipelineFlow, ReliabilityPanel, pipelineStates } from "@/components/ControlCenterPanels";
 import { AgentStatusPanel } from "@/components/AgentStatusPanel";
 import { BeforeAfterComparison } from "@/components/BeforeAfterComparison";
 import { optimizeWithProgress, type StageMap } from "@/lib/optimizeStream";
-import { AlertsPanel } from "@/components/AlertsPanel";
+import { AlertsTab } from "@/components/AlertsPanel";
+import { ScenarioSnapshot } from "@/components/ScenarioSnapshot";
+import { SectionNav } from "@/components/SectionNav";
+import { deriveAlerts } from "@/lib/alerts";
 import { setCopilotContext } from "@/lib/copilotContext";
 import { ImpactSummary } from "@/components/ImpactSummary";
 import { InstructionReview } from "@/components/InstructionReview";
@@ -25,6 +28,15 @@ import samplePack from "@/data/sampleCases.json";
 const ResultsPanel = lazy(() => import("@/components/ResultsPanel").then((m) => ({ default: m.ResultsPanel })));
 const DigitalTwinTab = lazy(() => import("@/components/DigitalTwinTab").then((m) => ({ default: m.DigitalTwinTab })));
 const PanelFallback = () => <div className="glass-card panel-fallback" aria-busy="true"><div className="loading-stack"><div className="loading-bar wide" /><div className="loading-bar" /></div></div>;
+
+const NAV_ITEMS = [
+  { id: "sec-plan", label: "Plan" },
+  { id: "sec-impact", label: "Impact" },
+  { id: "action-schedule", label: "Actions" },
+  { id: "sec-constraints", label: "Constraints" },
+  { id: "sec-why", label: "Why AI decided" },
+  { id: "sec-history", label: "History" },
+];
 
 const OPERATOR_PRESETS = [
   { label: "Solar maintenance", note: "Facilities will wash the rooftop solar panels from noon until 2 PM. Treat usable solar as roughly 25% of forecast during that window." },
@@ -81,8 +93,14 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [health, setHealth] = useState<"checking" | "connected" | "disconnected">("checking");
   const [lastHealthCheck, setLastHealthCheck] = useState<Date | null>(null);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "twin" | "resilience">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "twin" | "resilience" | "alerts">("dashboard");
   useEffect(() => { setCopilotContext(scenario); }, [scenario]);
+  const alerts = useMemo(() => (result ? deriveAlerts(scenario, result, new Date().getHours()) : []), [scenario, result]);
+  const warningCount = alerts.filter((alert) => alert.level === "warning").length;
+  const showSchedule = () => {
+    setActiveTab("dashboard");
+    window.setTimeout(() => document.getElementById("action-schedule")?.scrollIntoView({ behavior: "smooth", block: "start" }), 90);
+  };
   const [stages, setStages] = useState<StageMap>({});
   const [runs, setRuns] = useState<RunRecord[]>(() => loadRuns());
   const insights = useSchedulerInsights(API_BASE, scenario, result);
@@ -204,12 +222,21 @@ export default function Home() {
         <button type="button" className={`tab-button ${activeTab === "dashboard" ? "is-active" : ""}`} onClick={() => setActiveTab("dashboard")}><LayoutDashboard size={14} /> Operator Dashboard</button>
         <button type="button" className={`tab-button ${activeTab === "twin" ? "is-active" : ""}`} onClick={() => setActiveTab("twin")}><RadarIcon size={14} /> Digital Twin</button>
         <button type="button" className={`tab-button ${activeTab === "resilience" ? "is-active" : ""}`} onClick={() => setActiveTab("resilience")}><ShieldCheck size={14} /> Outage Planner</button>
+        <button type="button" className={`tab-button ${activeTab === "alerts" ? "is-active" : ""}`} onClick={() => setActiveTab("alerts")}><BellRing size={14} /> Alerts{warningCount > 0 && <span className="tab-badge" aria-label={`${warningCount} alerts to review`}>{warningCount}</span>}</button>
       </div>
 
       {activeTab === "twin" ? (
-        <Suspense fallback={<PanelFallback />}><DigitalTwinTab apiBase={API_BASE} scenario={scenario} /></Suspense>
+        <div className="tab-split">
+          <Suspense fallback={<PanelFallback />}><DigitalTwinTab apiBase={API_BASE} scenario={scenario} /></Suspense>
+          <ScenarioSnapshot scenario={scenario} />
+        </div>
       ) : activeTab === "resilience" ? (
-        <OutagePlanner apiBase={API_BASE} scenario={scenario} />
+        <div className="tab-split">
+          <OutagePlanner apiBase={API_BASE} scenario={scenario} />
+          <ScenarioSnapshot scenario={scenario} />
+        </div>
+      ) : activeTab === "alerts" ? (
+        <AlertsTab alerts={alerts} hasResult={Boolean(result)} onShowSchedule={showSchedule} onGoToDashboard={() => setActiveTab("dashboard")} />
       ) : (
         <>
           <section className="glass-card command-center">
@@ -226,41 +253,39 @@ export default function Home() {
             </div>
           </section>
 
+          {result && !loading && <SectionNav items={NAV_ITEMS} />}
+
           {loading && <div className="glass-card reasoning-panel"><div className="eyebrow"><span className="eyebrow-dot" /> AI reasoning</div><ReasoningTimeline active={loading} stages={stages} /></div>}
 
           <div className="workspace-grid">
-            <div className="builder-column"><ScenarioBuilder scenario={scenario} onChange={setScenario} onRandomize={() => { setScenario(randomizedFromPack()); setResult(null); setError(null); }} onLoadJson={loadJson} onLoadSampleCase={loadSampleCase} sampleJson={sampleJson} /></div>
-            <div className="results-column"><Suspense fallback={<PanelFallback />}><ResultsPanel result={result} loading={loading} battery={scenario.battery} /></Suspense></div>
+            <div className="builder-column"><ScenarioBuilder scenario={scenario} onChange={setScenario} onRandomize={() => { setScenario(randomizedFromPack()); setResult(null); setError(null); }} onLoadJson={loadJson} onLoadSampleCase={loadSampleCase} sampleJson={sampleJson} /><InstructionReview apiBase={API_BASE} scenario={scenario} disabled={loading} /></div>
+            <div className="results-column" id="sec-plan"><Suspense fallback={<PanelFallback />}><ResultsPanel result={result} loading={loading} battery={scenario.battery} /></Suspense></div>
           </div>
 
-          <InstructionReview apiBase={API_BASE} scenario={scenario} disabled={loading} />
-
           <div className="submit-bar glass-card"><div className="submit-context"><div className="submit-icon"><ShieldCheck size={18} /></div><div><strong>Ready to run <span>{scenario.scenario_id}</span></strong><small>POST /optimize-energy · {scenario.hours.length} hourly intervals · {scenario.operator_notes.length} operator directives</small></div></div><button className="button button-primary submit-button" type="button" onClick={handleSubmit} disabled={loading}>{loading ? <><Loader2 size={17} className="spin" /> Optimizing…</> : <><Play size={15} fill="currentColor" /> Run optimization <ArrowRight size={16} /></>}</button></div>
-
-          <RunHistory runs={runs} onClear={() => { setRuns([]); saveRuns([]); }} />
-
-          {result && !loading && <MiddayReplanner apiBase={API_BASE} scenario={scenario} result={result} onApply={applyReplan} />}
 
           {error && <motion.div className="error-panel" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}><div className="error-icon"><AlertTriangle size={17} /></div><div><strong>Optimization request needs attention</strong><p>{error}</p></div><button type="button" className="icon-button" onClick={() => setError(null)} aria-label="Dismiss error">×</button></motion.div>}
 
           {result && !loading && (
             <>
-            <AlertsPanel scenario={scenario} result={result} />
             <ImpactSummary scenario={scenario} result={result} />
             <div className="insight-grid">
               <div className="insight-col">
                 <ActionSchedule actions={insights.actions} failed={insights.failed} scenarioId={scenario.scenario_id} />
-                <BeforeAfterComparison apiBase={API_BASE} scenario={scenario} result={result} />
-                <WhyAIDecided result={result} />
               </div>
               <div className="insight-col">
+                <BeforeAfterComparison apiBase={API_BASE} scenario={scenario} result={result} />
+                <WhyAIDecided result={result} />
                 <AgentStatusPanel loading={loading} hasResult={Boolean(result)} hasError={Boolean(error)} />
                 <PipelineFlow states={pipelineStates(stages, { loading, hasResult: Boolean(result) && !error, scheduled: insights.actions !== null })} />
                 <ReliabilityPanel reliability={insights.reliability} />
               </div>
             </div>
+            <MiddayReplanner apiBase={API_BASE} scenario={scenario} result={result} onApply={applyReplan} />
             </>
           )}
+
+          <RunHistory runs={runs} onClear={() => { setRuns([]); saveRuns([]); }} />
         </>
       )}
 

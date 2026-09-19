@@ -158,7 +158,9 @@ GridWise-Nexus-AI/
 │   │   │   ├── SystemStatusBar.tsx      # LLM / optimizer / simulation indicators
 │   │   │   ├── ReasoningTimeline.tsx    # Live optimization steps from real backend stage events
 │   │   │   ├── ActionSchedule.tsx       # AI Action Schedule timeline + copy/CSV/print export
-│   │   │   ├── AlertsPanel.tsx          # Operator alerts derived from the real plan
+│   │   │   ├── AlertsPanel.tsx          # Alerts tab: risk strip, needs-attention and good-to-know lists
+│   │   │   ├── SectionNav.tsx           # Sticky jump links for the long results page
+│   │   │   ├── ScenarioSnapshot.tsx     # Scenario summary shown beside the Twin and Outage tools
 │   │   │   ├── ImpactSummary.tsx        # Cost saved, grid avoided, CO₂, solar utilised
 │   │   │   ├── RunHistory.tsx           # Persisted runs with side-by-side comparison
 │   │   │   ├── BeforeAfterComparison.tsx# Constraint Impact Analysis
@@ -171,7 +173,7 @@ GridWise-Nexus-AI/
 │   │   │   ├── DigitalTwinTab.tsx       # What-if simulation via /copilot/chat
 │   │   │   └── copilot/                 # Floating AI Copilot: bubble, chat window, voice input
 │   │   ├── lib/                         # Pure, unit-tested logic: impact, alerts, history, export, streaming
-│   │   ├── polish.css / alerts.css / history.css / operations.css  # Design system layers, themes, phone breakpoints
+│   │   ├── polish.css / alerts.css / history.css / operations.css / layout.css  # Design system layers, themes, layout rhythm, phone breakpoints
 │   │   └── data/sampleCases.json  # Copy of the public sample pack used by the UI
 │   ├── render.yaml / Dockerfile   # Static-site build (npm run build → dist/public)
 │   └── package.json
@@ -453,7 +455,7 @@ To test actual note interpretation using configured providers and credentials in
 python -m pytest -q -p no:cacheprovider tests/test_public_samples.py -k live_llm --live-llm
 ```
 
-Run the frontend unit tests from `frontend`: `npm test` (Vitest, 21 tests covering impact and carbon math, alert derivation, export, run history, pipeline mapping, and the streaming client including its fallback).
+Run the frontend unit tests from `frontend`: `npm test` (Vitest, 23 tests covering impact and carbon math, alert derivation and time windows, export, run history, pipeline mapping, and the streaming client including its fallback).
 
 Latest live result: **all 10 public cases passed**, including directive interpretation, schedule validity, and optimal cost. Live runs call external providers and use their quota; offline replay tests do not establish LLM accuracy. See [tests/README.md](backend/tests/README.md) for details.
 
@@ -560,7 +562,9 @@ The React AI Energy Operations Control Center (`frontend/`) is a view over the s
 - **Light and dark themes** — a sun/moon toggle in the top bar, remembered locally, with a smooth transition and AA text contrast in both.
 - **Live reasoning timeline and AI Pipeline** — driven by the real stage events from `/optimize-energy/stream`; falls back to a timed indicator if streaming is unavailable.
 - **AI Action Schedule** — a timeline of what to do, when, and why (charge battery, peak shaving, solar priority, reduce grid dependency, maintain reserve), with priority and expected impact. Copy it, download it as CSV, or print it to PDF.
-- **Operator alerts** — what needs attention, derived from the real plan: battery at minimum reserve, peak-tariff windows (escalated when one starts within three hours), curtailed solar, and peak grid import. The Copilot bubble turns amber while warnings exist.
+- **Alerts tab** — its own section (with a count badge on the tab) for what needs attention, derived from the real plan: battery at minimum reserve, peak-tariff windows (escalated when one starts within three hours), curtailed solar, and peak grid import. A 24-hour risk strip shows when each alert applies, alerts are split into "Needs attention" and "Good to know", and each links to the action schedule. Alerts are kept separate from the Copilot chat.
+- **Less scrolling** — sticky jump links (Plan, Impact, Actions, Constraints, Why AI decided, History), a Run bar that stays pinned while you edit the scenario, an hourly table that scrolls inside its card, balanced two-column result layout, and the instruction check placed under the scenario builder.
+- **Scenario snapshot** — the Digital Twin and Outage Planner tabs show the scenario they run against (daily demand, solar, battery, tariff range, and a 24-hour demand/solar/tariff chart) beside the tool, with identical spacing across all tabs.
 - **Savings & carbon** — cost saved, grid energy avoided, estimated CO₂ avoided, and solar utilised, compared with buying every kWh from the grid. CO₂ uses an assumed 0.6 kg/kWh factor and is an estimate.
 - **Run history and compare** — the last eight runs are kept in `localStorage`; select any two to compare cost, grid energy, peak load, savings, and CO₂ side by side.
 - **AI Reliability** — directive understanding, constraint validation, and optimization validity as measured by `/scheduler/actions`, with the number of independent checks run.

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pipelineStates } from "@/components/ControlCenterPanels";
-import { deriveAlerts } from "@/lib/alerts";
+import { deriveAlerts, hourCoverage } from "@/lib/alerts";
 import { actionsToCsv, actionsToText } from "@/lib/exportPlan";
 import { makeResult, makeScenario } from "@/lib/fixtures";
 import { addRun, compareRuns, loadRuns, makeRun, MAX_RUNS, saveRuns } from "@/lib/history";
@@ -55,6 +55,29 @@ describe("deriveAlerts", () => {
     const overrides = Object.fromEntries([10, 11, 12, 13, 14].map((h) => [h, { solar_used_kwh: 6 }]));
     const alerts = deriveAlerts(scenario, makeResult(scenario, overrides), 8);
     expect(alerts.find((a) => a.id === "solar")?.title).toContain("10%");
+  });
+});
+
+describe("alert windows", () => {
+  it("attaches inclusive hour windows and maps them onto a 24-hour coverage strip", () => {
+    const scenario = makeScenario();
+    const result = makeResult(scenario, { 1: { battery_energy_after_kwh: 20 }, 2: { battery_energy_after_kwh: 20 } });
+    const alerts = deriveAlerts(scenario, result, 8);
+    const reserve = alerts.find((alert) => alert.kind === "reserve");
+    expect(reserve?.window).toEqual([1, 2]);
+    const coverage = hourCoverage(alerts);
+    expect(coverage).toHaveLength(24);
+    expect(coverage[1]).toContain("reserve");
+    expect(coverage[2]).toContain("reserve");
+    expect(coverage[3]).not.toContain("reserve");
+    expect(coverage[17]).toContain("peak");
+    expect(coverage[5]).toEqual([]);
+  });
+
+  it("gives the all-clear alert no window so it never paints the strip", () => {
+    const scenario = makeScenario();
+    const clear = deriveAlerts(scenario, makeResult(scenario), 8).find((alert) => alert.kind === "clear");
+    expect(clear?.window).toBeUndefined();
   });
 });
 

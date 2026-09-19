@@ -9,7 +9,7 @@ export function WhyAIDecided({ result }: { result: OptimizeResponse }) {
   const peakHour = result.hourly_plan.reduce((worst, row) => (row.grid_kwh > worst.grid_kwh ? row : worst), result.hourly_plan[0]);
 
   return (
-    <section className="glass-card why-panel">
+    <section className="glass-card why-panel" id="sec-why">
       <div className="panel-heading compact-heading">
         <div><div className="eyebrow"><span className="eyebrow-dot violet" /> Explainable AI</div><h2>Why AI decided this</h2></div>
       </div>

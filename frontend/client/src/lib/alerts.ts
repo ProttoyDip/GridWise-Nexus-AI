@@ -1,8 +1,16 @@
-import { useSyncExternalStore } from "react";
 import type { OptimizeResponse, Scenario } from "@/types";
 
 export type AlertLevel = "warning" | "info" | "ok";
-export type OpAlert = { id: string; level: AlertLevel; title: string; detail: string };
+export type AlertKind = "reserve" | "peak" | "solar" | "grid" | "clear";
+export type OpAlert = {
+  id: string;
+  level: AlertLevel;
+  kind: AlertKind;
+  title: string;
+  detail: string;
+  /** Inclusive hour range the alert covers, when it is tied to a time window. */
+  window?: [number, number];
+};
 
 const hh = (hour: number) => `${String(hour % 24).padStart(2, "0")}:00`;
 
@@ -26,7 +34,7 @@ export function deriveAlerts(scenario: Scenario, result: OptimizeResponse, nowHo
 
   const reserve = scenario.battery.minimum_energy_kwh;
   windows(plan.filter((row) => (row.battery_energy_after_kwh ?? Infinity) <= reserve + 0.5).map((row) => row.hour)).forEach((win) => {
-    alerts.push({ id: `reserve-${win[0]}`, level: "warning", title: `Battery at minimum reserve ${span(win)}`, detail: `Charge stays at ${reserve} kWh, so it cannot discharge further. Grid covers demand in this window.` });
+    alerts.push({ id: `reserve-${win[0]}`, level: "warning", kind: "reserve", window: win, title: `Battery at minimum reserve ${span(win)}`, detail: `Charge stays at ${reserve} kWh, so it cannot discharge further. Grid covers demand in this window.` });
   });
 
   const tariffs = scenario.hours.map((h) => h.tariff_bdt_per_kwh).sort((a, b) => a - b);
@@ -38,6 +46,8 @@ export function deriveAlerts(scenario: Scenario, result: OptimizeResponse, nowHo
     alerts.push({
       id: `peak-${win[0]}`,
       level: upcoming ? "warning" : "info",
+      kind: "peak",
+      window: win,
       title: `${upcoming ? "Peak tariff starting soon: " : "Peak tariff "}${span(win)}`,
       detail: covered > 0 ? `Battery discharge covers ${Math.round(covered)} kWh of this window.` : "No battery discharge is planned here, so expect the highest energy cost.",
     });
@@ -46,32 +56,28 @@ export function deriveAlerts(scenario: Scenario, result: OptimizeResponse, nowHo
   const solarAvailable = scenario.hours.reduce((sum, h) => sum + h.solar_kwh, 0);
   const solarUsed = plan.reduce((sum, row) => sum + row.solar_used_kwh, 0);
   if (solarAvailable > 0 && solarUsed / solarAvailable < 0.7) {
-    const curtailed = plan.filter((row) => (forecast.get(row.hour)?.solar_kwh ?? 0) > 0 && row.solar_used_kwh < 0.9 * (forecast.get(row.hour)?.solar_kwh ?? 0)).map((row) => row.hour);
-    alerts.push({ id: "solar", level: "warning", title: `Only ${Math.round((solarUsed / solarAvailable) * 100)}% of forecast solar is usable`, detail: curtailed.length ? `Reduced around ${windows(curtailed).map(span).join(", ")}, usually from a solar-reduction directive.` : "Check the solar forecast and directives." });
+    const curtailed = windows(plan.filter((row) => (forecast.get(row.hour)?.solar_kwh ?? 0) > 0 && row.solar_used_kwh < 0.9 * (forecast.get(row.hour)?.solar_kwh ?? 0)).map((row) => row.hour));
+    alerts.push({
+      id: "solar",
+      level: "warning",
+      kind: "solar",
+      window: curtailed[0],
+      title: `Only ${Math.round((solarUsed / solarAvailable) * 100)}% of forecast solar is usable`,
+      detail: curtailed.length ? `Reduced around ${curtailed.map(span).join(", ")}, usually from a solar-reduction directive.` : "Check the solar forecast and directives.",
+    });
   }
 
   const peak = plan.reduce((best, row) => (row.grid_kwh > best.grid_kwh ? row : best), plan[0]);
-  if (peak) alerts.push({ id: "peak-grid", level: "info", title: `Highest grid import at ${hh(peak.hour)}`, detail: `${peak.grid_kwh.toFixed(0)} kWh, the day's peak. Watch the feeder limit.` });
+  if (peak) alerts.push({ id: "peak-grid", level: "info", kind: "grid", window: [peak.hour, peak.hour], title: `Highest grid import at ${hh(peak.hour)}`, detail: `${peak.grid_kwh.toFixed(0)} kWh, the day's peak. Watch the feeder limit.` });
 
-  if (!alerts.some((a) => a.level === "warning")) alerts.unshift({ id: "clear", level: "ok", title: "No critical alerts", detail: "The plan is within battery, solar and grid limits." });
-  return alerts.sort((a, b) => ({ warning: 0, info: 1, ok: 2 })[a.level] - ({ warning: 0, info: 1, ok: 2 })[b.level]);
+  if (!alerts.some((a) => a.level === "warning")) alerts.unshift({ id: "clear", level: "ok", kind: "clear", title: "No critical alerts", detail: "The plan is within battery, solar and grid limits." });
+  const order = { warning: 0, info: 1, ok: 2 };
+  return alerts.sort((a, b) => order[a.level] - order[b.level]);
 }
 
-let alertCount = 0;
-const listeners = new Set<() => void>();
-
-export function setAlertCount(count: number) {
-  if (count === alertCount) return;
-  alertCount = count;
-  listeners.forEach((listener) => listener());
-}
-
-export function useAlertCount(): number {
-  return useSyncExternalStore(
-    (listener) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    () => alertCount,
+/** For each hour, the alert kinds that cover it (used by the 24-hour risk strip). */
+export function hourCoverage(alerts: OpAlert[]): AlertKind[][] {
+  return Array.from({ length: 24 }, (_, hour) =>
+    Array.from(new Set(alerts.filter((a) => a.window && hour >= a.window[0] && hour <= a.window[1]).map((a) => a.kind))),
   );
 }
