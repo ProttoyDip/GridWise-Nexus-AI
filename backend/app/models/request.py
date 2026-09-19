@@ -19,6 +19,9 @@ class BatteryConfig(BaseModel):
     minimum_energy_kwh: float = Field(..., ge=0)
     max_charge_kwh_per_hour: float = Field(..., ge=0)
     max_discharge_kwh_per_hour: float = Field(..., ge=0)
+    charge_efficiency: float = Field(1.0, gt=0, le=1)
+    discharge_efficiency: float = Field(1.0, gt=0, le=1)
+    degradation_cost_bdt_per_kwh: float = Field(0.0, ge=0)
 
     @model_validator(mode="after")
     def check_bounds(self) -> "BatteryConfig":
@@ -31,11 +34,29 @@ class BatteryConfig(BaseModel):
         return self
 
 
+class FlexibleLoad(BaseModel):
+    name: str = Field(..., min_length=1, max_length=80)
+    energy_kwh: float = Field(..., gt=0)
+    max_power_kwh_per_hour: float = Field(..., gt=0)
+    earliest_hour: int = Field(..., ge=0, le=23)
+    latest_hour: int = Field(..., ge=0, le=23)
+
+    @model_validator(mode="after")
+    def feasible_window(self) -> "FlexibleLoad":
+        if self.latest_hour < self.earliest_hour:
+            raise ValueError("latest_hour must be greater than or equal to earliest_hour")
+        available = (self.latest_hour - self.earliest_hour + 1) * self.max_power_kwh_per_hour
+        if self.energy_kwh > available:
+            raise ValueError("flexible load energy exceeds the available window and power limit")
+        return self
+
+
 class ScenarioRequest(BaseModel):
     scenario_id: str = Field(..., min_length=1)
     operator_notes: list[str] = Field(..., min_length=1, max_length=3)
     hours: list[HourEntry] = Field(..., min_length=24, max_length=24)
     battery: BatteryConfig
+    flexible_loads: list[FlexibleLoad] = Field(default_factory=list, max_length=12)
 
     @field_validator("operator_notes")
     @classmethod
@@ -53,4 +74,12 @@ class ScenarioRequest(BaseModel):
         hour_values = sorted(h.hour for h in v)
         if hour_values != list(range(24)):
             raise ValueError("hours must contain each hour from 0 to 23 exactly once")
+        return v
+
+    @field_validator("flexible_loads")
+    @classmethod
+    def flexible_load_names_unique(cls, v: list[FlexibleLoad]) -> list[FlexibleLoad]:
+        names = [load.name.casefold().strip() for load in v]
+        if len(names) != len(set(names)):
+            raise ValueError("flexible load names must be unique")
         return v

@@ -9,13 +9,16 @@ import { optimizeWithProgress, type StageMap } from "@/lib/optimizeStream";
 import { AlertsPanel } from "@/components/AlertsPanel";
 import { setCopilotContext } from "@/lib/copilotContext";
 import { ImpactSummary } from "@/components/ImpactSummary";
+import { InstructionReview } from "@/components/InstructionReview";
+import { MiddayReplanner } from "@/components/MiddayReplanner";
+import { OutagePlanner } from "@/components/OutagePlanner";
 import { RunHistory } from "@/components/RunHistory";
 import { addRun, loadRuns, makeRun, saveRuns, type RunRecord } from "@/lib/history";
 import { ReasoningTimeline } from "@/components/ReasoningTimeline";
 import { ScenarioBuilder } from "@/components/ScenarioBuilder";
 import { SystemStatusBar } from "@/components/SystemStatusBar";
 import { WhyAIDecided } from "@/components/WhyAIDecided";
-import type { HourInput, OptimizeResponse, Scenario } from "@/types";
+import type { HourInput, OptimizeResponse, ReplanResult, Scenario } from "@/types";
 import samplePack from "@/data/sampleCases.json";
 
 // Charts and the twin tab are heavy and not needed for first paint.
@@ -78,7 +81,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [health, setHealth] = useState<"checking" | "connected" | "disconnected">("checking");
   const [lastHealthCheck, setLastHealthCheck] = useState<Date | null>(null);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "twin">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "twin" | "resilience">("dashboard");
   useEffect(() => { setCopilotContext(scenario); }, [scenario]);
   const [stages, setStages] = useState<StageMap>({});
   const [runs, setRuns] = useState<RunRecord[]>(() => loadRuns());
@@ -157,6 +160,29 @@ export default function Home() {
     }
   };
 
+  const applyReplan = (replan: ReplanResult) => {
+    setResult((current) => {
+      if (!current) return current;
+      const replacements = new Map(replan.remaining_plan.map((entry) => [entry.hour, entry]));
+      const hourly_plan = current.hourly_plan.map((entry) => {
+        const replacement = replacements.get(entry.hour);
+        if (replacement) return replacement;
+        return entry.hour === replan.current_hour - 1
+          ? { ...entry, battery_energy_after_kwh: replan.current_battery_energy_kwh }
+          : entry;
+      });
+      const tariff = new Map(scenario.hours.map((entry) => [entry.hour, entry.tariff_bdt_per_kwh]));
+      return {
+        ...current,
+        hourly_plan,
+        total_grid_kwh: hourly_plan.reduce((sum, entry) => sum + entry.grid_kwh, 0),
+        total_cost_bdt: hourly_plan.reduce((sum, entry) => sum + entry.grid_kwh * (tariff.get(entry.hour) ?? 0), 0),
+        peak_grid_kwh: Math.max(...hourly_plan.map((entry) => entry.grid_kwh)),
+        plan_summary: `Remaining hours replanned from ${String(replan.current_hour).padStart(2, "0")}:00 using a measured battery state of ${replan.current_battery_energy_kwh.toFixed(1)} kWh.`,
+      };
+    });
+  };
+
   const healthCopy = health === "connected" ? "API connected" : health === "disconnected" ? "API unavailable" : "Checking API";
 
   return <div className="app-shell">
@@ -177,10 +203,13 @@ export default function Home() {
       <div className="tab-strip">
         <button type="button" className={`tab-button ${activeTab === "dashboard" ? "is-active" : ""}`} onClick={() => setActiveTab("dashboard")}><LayoutDashboard size={14} /> Operator Dashboard</button>
         <button type="button" className={`tab-button ${activeTab === "twin" ? "is-active" : ""}`} onClick={() => setActiveTab("twin")}><RadarIcon size={14} /> Digital Twin</button>
+        <button type="button" className={`tab-button ${activeTab === "resilience" ? "is-active" : ""}`} onClick={() => setActiveTab("resilience")}><ShieldCheck size={14} /> Outage Planner</button>
       </div>
 
       {activeTab === "twin" ? (
         <Suspense fallback={<PanelFallback />}><DigitalTwinTab apiBase={API_BASE} scenario={scenario} /></Suspense>
+      ) : activeTab === "resilience" ? (
+        <OutagePlanner apiBase={API_BASE} scenario={scenario} />
       ) : (
         <>
           <section className="glass-card command-center">
@@ -204,10 +233,13 @@ export default function Home() {
             <div className="results-column"><Suspense fallback={<PanelFallback />}><ResultsPanel result={result} loading={loading} battery={scenario.battery} /></Suspense></div>
           </div>
 
+          <InstructionReview apiBase={API_BASE} scenario={scenario} disabled={loading} />
 
           <div className="submit-bar glass-card"><div className="submit-context"><div className="submit-icon"><ShieldCheck size={18} /></div><div><strong>Ready to run <span>{scenario.scenario_id}</span></strong><small>POST /optimize-energy · {scenario.hours.length} hourly intervals · {scenario.operator_notes.length} operator directives</small></div></div><button className="button button-primary submit-button" type="button" onClick={handleSubmit} disabled={loading}>{loading ? <><Loader2 size={17} className="spin" /> Optimizing…</> : <><Play size={15} fill="currentColor" /> Run optimization <ArrowRight size={16} /></>}</button></div>
 
           <RunHistory runs={runs} onClear={() => { setRuns([]); saveRuns([]); }} />
+
+          {result && !loading && <MiddayReplanner apiBase={API_BASE} scenario={scenario} result={result} onApply={applyReplan} />}
 
           {error && <motion.div className="error-panel" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}><div className="error-icon"><AlertTriangle size={17} /></div><div><strong>Optimization request needs attention</strong><p>{error}</p></div><button type="button" className="icon-button" onClick={() => setError(null)} aria-label="Dismiss error">×</button></motion.div>}
 

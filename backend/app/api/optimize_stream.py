@@ -33,7 +33,11 @@ def optimize_energy_stream(payload: ScenarioRequest) -> StreamingResponse:
         try:
             with observe_progress(events.put):
                 response = optimize_energy(payload)
-            events.put({"event": "result", "data": response.model_dump(mode="json")})
+            data = response.model_dump(mode="json")
+            if payload.flexible_loads:
+                for serialized, entry in zip(data["hourly_plan"], response.hourly_plan):
+                    serialized["flexible_loads"] = dict(entry.flexible_loads)
+            events.put({"event": "result", "data": data})
         except HTTPException as exc:
             events.put({"event": "error", "status": exc.status_code, "detail": str(exc.detail)})
         except Exception:  # noqa: BLE001 - the stream must always terminate cleanly

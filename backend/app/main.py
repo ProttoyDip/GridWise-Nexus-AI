@@ -14,7 +14,7 @@ load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import copilot, health, llm_status, optimize, optimize_stream, scheduler, system_status
+from app.api import analysis, copilot, health, llm_status, optimize, optimize_stream, replan, resilience, scheduler, system_status
 from app.demo.routes import router as demo_router
 
 app = FastAPI(title="GridWise Optimization API")
@@ -41,6 +41,9 @@ app.include_router(llm_status.router)
 app.include_router(system_status.router)
 app.include_router(copilot.router)
 app.include_router(scheduler.router)
+app.include_router(analysis.router)
+app.include_router(resilience.router)
+app.include_router(replan.router)
 app.include_router(demo_router)
 
 

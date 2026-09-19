@@ -11,6 +11,17 @@ export type BatteryConfig = {
   minimum_energy_kwh: number;
   max_charge_kwh_per_hour: number;
   max_discharge_kwh_per_hour: number;
+  charge_efficiency?: number;
+  discharge_efficiency?: number;
+  degradation_cost_bdt_per_kwh?: number;
+};
+
+export type FlexibleLoad = {
+  name: string;
+  energy_kwh: number;
+  max_power_kwh_per_hour: number;
+  earliest_hour: number;
+  latest_hour: number;
 };
 
 export type Scenario = {
@@ -18,6 +29,7 @@ export type Scenario = {
   operator_notes: string[];
   hours: HourInput[];
   battery: BatteryConfig;
+  flexible_loads?: FlexibleLoad[];
 };
 
 export type DirectiveInterpretation = {
@@ -36,6 +48,7 @@ export type HourlyPlan = {
   battery_kwh?: number;
   battery_energy_after_kwh?: number;
   cost_bdt?: number;
+  flexible_loads?: Record<string, number>;
 };
 
 export type SystemStatus = {
@@ -68,4 +81,47 @@ export type Reliability = {
   constraint_validation: number | null;
   optimization_validity: number | null;
   checks_run: number;
+};
+
+export type ScenarioAnalysis = {
+  directives: DirectiveInterpretation[];
+  conflict: {
+    feasible: boolean;
+    conflicting_note_indices: number[];
+    conflicting_directive_types: string[];
+    hours: number[];
+    summary: string;
+    suggestions: string[];
+  };
+};
+
+export type OutageResult = {
+  outage_start_hour: number;
+  outage_end_hour: number;
+  critical_load_fraction: number;
+  fully_served: boolean;
+  survival_hours: number;
+  outage_duration_hours: number;
+  total_critical_load_kwh: number;
+  unserved_energy_kwh: number;
+  minimum_battery_energy_kwh: number;
+  hourly: Array<{
+    hour: number;
+    critical_load_kwh: number;
+    solar_used_kwh: number;
+    battery_discharge_kwh: number;
+    solar_charge_kwh: number;
+    unserved_kwh: number;
+    battery_energy_after_kwh: number;
+  }>;
+};
+
+export type ReplanResult = {
+  scenario_id: string;
+  current_hour: number;
+  current_battery_energy_kwh: number;
+  remaining_plan: HourlyPlan[];
+  remaining_grid_kwh: number;
+  remaining_cost_bdt: number;
+  remaining_peak_grid_kwh: number;
 };

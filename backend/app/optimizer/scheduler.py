@@ -19,4 +19,13 @@ def build_hourly_plan(
     directives: Sequence[DirectiveInterpretation] = (),
 ) -> list[HourlyPlanEntry]:
     """Schedule a scenario using directives returned by the guardrail layer."""
+    if scenario.flexible_loads:
+        return solve_energy_schedule(
+            scenario.hours,
+            scenario.battery,
+            directives,
+            scenario.flexible_loads,
+        )
+    # Preserve the original three-argument seam used by failure simulations
+    # and integrations that patch the solver.
     return solve_energy_schedule(scenario.hours, scenario.battery, directives)

@@ -67,6 +67,8 @@ export function ResultsPanel({ result, loading, battery }: ResultsPanelProps) {
   const plan: HourlyPlan[] = result?.hourly_plan ?? [];
   const chartData = plan.map((item) => ({ ...item, actionIndex: item.battery_action === "charge" ? 1 : item.battery_action === "discharge" ? -1 : 0 }));
   const hasSoc = plan.some((item) => typeof item.battery_energy_after_kwh === "number");
+  const flexibleNames = Array.from(new Set(plan.flatMap((item) => Object.keys(item.flexible_loads ?? {}))));
+  const estimatedWear = plan.reduce((sum, item) => sum + (item.battery_kwh ?? 0), 0) * (battery?.degradation_cost_bdt_per_kwh ?? 0);
 
   return <div className="results-stack">
     <section className="glass-card directive-panel">
@@ -121,6 +123,20 @@ export function ResultsPanel({ result, loading, battery }: ResultsPanelProps) {
             </ResponsiveContainer>
           </div>
         )}
+        {flexibleNames.length > 0 && (
+          <div className="flex-schedule">
+            <div className="plan-table-header"><span>Flexible equipment schedule</span><span>Optimizer-selected operating hours</span></div>
+            {flexibleNames.map((name) => (
+              <div className="flex-schedule-row" key={name}>
+                <strong>{name}</strong>
+                <div className="flex-schedule-hours">
+                  {plan.filter((entry) => (entry.flexible_loads?.[name] ?? 0) > 0.0001).map((entry) => <span key={entry.hour}>{String(entry.hour).padStart(2, "0")}:00 · {entry.flexible_loads?.[name].toFixed(1)} kWh</span>)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {estimatedWear > 0 && <p className="meter-note">Estimated battery wear: {estimatedWear.toLocaleString(undefined, { maximumFractionDigits: 1 })} BDT based on configured throughput cost.</p>}
         <div className="plan-footer"><div className="summary-icon"><CloudSun size={17} /></div><div><span className="stat-label">Plan summary</span><p>{result.plan_summary || "No summary returned."}</p></div></div>
         <div className="plan-table-wrap"><div className="plan-table-header"><span>Dispatch detail</span><span>Battery action by interval</span></div><div className="plan-strip">{plan.map((item) => <div className="plan-strip-item" key={item.hour} title={`${item.hour}:00 — ${item.battery_action}`}><span>{String(item.hour).padStart(2, "0")}</span><i style={{ background: actionColor(item.battery_action), boxShadow: `0 0 10px ${actionColor(item.battery_action)}66` }} /></div>)}</div></div>
       </> : <div className="plan-empty"><BatteryCharging size={22} /><span>Plan metrics and dispatch curve will appear here after a successful run.</span></div>}

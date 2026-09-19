@@ -10,7 +10,7 @@ from collections.abc import Sequence
 
 import pulp
 
-from app.models.request import BatteryConfig, HourEntry
+from app.models.request import BatteryConfig, FlexibleLoad, HourEntry
 from app.models.response import DirectiveInterpretation, HourlyPlanEntry
 from app.optimizer.directives import apply_directives
 from app.optimizer.warm_start import warm_start_store
@@ -25,12 +25,13 @@ class OptimizationError(RuntimeError):
 def solve_energy_schedule(
     hours: list[HourEntry], battery: BatteryConfig,
     directives: Sequence[DirectiveInterpretation] = (),
+    flexible_loads: Sequence[FlexibleLoad] = (),
     *, use_warm_start: bool = True, use_binary_modes: bool = False,
 ) -> list[HourlyPlanEntry]:
     """Return a chronological optimal schedule for a complete daily forecast.
 
-    Battery energy is measured at the end of each hour. Charging/discharging
-    is lossless, grid export is forbidden, and unused solar may be curtailed.
+    Battery energy is measured at the end of each hour. Configured charge and
+    discharge efficiencies are applied, grid export is forbidden, and unused solar may be curtailed.
     The battery returns to its initial energy at the end of hour 23.
     Directives must have passed guardrail validation; all are hard constraints.
     Invalid input raises ValueError; backend failures raise OptimizationError.
@@ -39,11 +40,12 @@ def solve_energy_schedule(
     charge/discharge can be cancelled without changing balance, energy, cost,
     or any directive, while only reducing rate usage. Thus the LP optimum has
     an equally optimal schedule with mutually exclusive actions. The original
-    binary formulation remains available with use_binary_modes=True, including
-    native CBC warm starts. This equivalence depends on the lossless model.
+    binary formulation remains available with use_binary_modes=True. Realistic
+    efficiency automatically enables exclusive binary charge/discharge modes.
     """
     hours = [HourEntry.model_validate(h.model_dump(), strict=True) for h in hours]
     battery = BatteryConfig.model_validate(battery.model_dump(), strict=True)
+    flexible_loads = [FlexibleLoad.model_validate(load.model_dump(), strict=True) for load in flexible_loads]
     if len(hours) != 24 or sorted(h.hour for h in hours) != list(range(24)):
         raise ValueError("hours must cover each hour from 0 through 23 exactly once")
     if not all(
@@ -71,17 +73,39 @@ def solve_energy_schedule(
         "battery_energy", indices,
         lowBound=battery.minimum_energy_kwh, upBound=battery.capacity_kwh,
     )
-    charging = pulp.LpVariable.dicts("charging", indices, cat=pulp.LpBinary) if use_binary_modes else None
-    model += pulp.lpSum(grid[h.hour] * h.tariff_bdt_per_kwh for h in hours)
+    realistic_efficiency = battery.charge_efficiency < 1 or battery.discharge_efficiency < 1
+    effective_binary = use_binary_modes or realistic_efficiency
+    charging = pulp.LpVariable.dicts("charging", indices, cat=pulp.LpBinary) if effective_binary else None
+    task_power = {
+        (task_index, hour): pulp.LpVariable(
+            f"flex_{task_index}_{hour}",
+            lowBound=0,
+            upBound=(task.max_power_kwh_per_hour if task.earliest_hour <= hour <= task.latest_hour else 0),
+        )
+        for task_index, task in enumerate(flexible_loads)
+        for hour in indices
+    }
+    for task_index, task in enumerate(flexible_loads):
+        model += pulp.lpSum(task_power[task_index, hour] for hour in indices) == task.energy_kwh, f"flex_energy_{task_index}"
+    model += (
+        pulp.lpSum(grid[h.hour] * h.tariff_bdt_per_kwh for h in hours)
+        + pulp.lpSum(
+            (battery_charge[hour] + battery_discharge[hour]) * battery.degradation_cost_bdt_per_kwh
+            for hour in indices
+        )
+    )
     for h in hours:
         hour = h.hour
         model += (
             grid[hour] + solar_used[hour] + battery_discharge[hour]
             == h.demand_kwh + battery_charge[hour]
+            + pulp.lpSum(task_power[task_index, hour] for task_index in range(len(flexible_loads)))
         ), f"energy_balance_{hour}"
         previous_energy = battery.initial_energy_kwh if hour == 0 else battery_energy[hour - 1]
         model += (
-            battery_energy[hour] == previous_energy + battery_charge[hour] - battery_discharge[hour]
+            battery_energy[hour] == previous_energy
+            + battery_charge[hour] * battery.charge_efficiency
+            - battery_discharge[hour] / battery.discharge_efficiency
         ), f"battery_continuity_{hour}"
         if charging is not None:
             model += battery_charge[hour] <= battery.max_charge_kwh_per_hour * charging[hour]
@@ -94,7 +118,7 @@ def solve_energy_schedule(
     )
 
     seed = None
-    if use_warm_start and charging is not None:
+    if use_warm_start and charging is not None and not flexible_loads and not realistic_efficiency:
         try:
             seed = warm_start_store.find(hours, battery, directives)
             if seed is not None:
@@ -113,7 +137,7 @@ def solve_energy_schedule(
             seed = None
 
     def cold_solve():
-        return model.solve(pulp.PULP_CBC_CMD(msg=False, threads=1, gapRel=0, gapAbs=0, mip=use_binary_modes))
+        return model.solve(pulp.PULP_CBC_CMD(msg=False, threads=1, gapRel=0, gapAbs=0, mip=effective_binary))
 
     try:
         if seed is None:
@@ -155,21 +179,28 @@ def solve_energy_schedule(
         charge = value(battery_charge[hour])
         discharge = value(battery_discharge[hour])
         # Cancel lossless cycles, preserving net energy and grid cost exactly.
-        cancelled = min(charge, discharge)
-        charge -= cancelled
-        discharge -= cancelled
+        if not realistic_efficiency:
+            cancelled = min(charge, discharge)
+            charge -= cancelled
+            discharge -= cancelled
         if charge > 0:
             action, amount = "charge", charge
         elif discharge > 0:
             action, amount = "discharge", discharge
         else:
             action, amount = "idle", 0.0
-        schedule.append(HourlyPlanEntry(
+        entry = HourlyPlanEntry(
             hour=hour, grid_kwh=value(grid[hour]), solar_used_kwh=value(solar_used[hour]),
             battery_action=action, battery_kwh=amount,
             battery_energy_after_kwh=value(battery_energy[hour]),
-        ))
-    if use_warm_start:
+        )
+        entry._flexible_loads = {
+            task.name: task_amount
+            for task_index, task in enumerate(flexible_loads)
+            if (task_amount := value(task_power[task_index, hour])) > 1e-7
+        }
+        schedule.append(entry)
+    if use_warm_start and not flexible_loads and not realistic_efficiency:
         try:
             warm_start_store.remember(hours, battery, directives, schedule)
         except Exception as exc:

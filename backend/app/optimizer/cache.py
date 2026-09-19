@@ -11,13 +11,14 @@ import os
 import threading
 import time
 
-from app.models.request import BatteryConfig, HourEntry
+from app.models.request import BatteryConfig, FlexibleLoad, HourEntry
 from app.models.response import DirectiveInterpretation, HourlyPlanEntry
 
 
 def optimization_cache_key(
     scenario_id: str, hours: Sequence[HourEntry], battery: BatteryConfig,
     validated_directives: Sequence[DirectiveInterpretation],
+    flexible_loads: Sequence[FlexibleLoad] = (),
 ) -> str:
     """Hash canonical public inputs; private metadata is excluded."""
     data = {
@@ -25,6 +26,7 @@ def optimization_cache_key(
         "hours": [hour.model_dump() for hour in sorted(hours, key=lambda entry: entry.hour)],
         "battery": battery.model_dump(),
         "validated_directives": [directive.model_dump() for directive in validated_directives],
+        "flexible_loads": [load.model_dump() for load in flexible_loads],
     }
     serialized = json.dumps(data, sort_keys=True, separators=(",", ":"), allow_nan=False)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()

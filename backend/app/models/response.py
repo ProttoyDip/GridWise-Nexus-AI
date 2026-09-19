@@ -86,12 +86,18 @@ class DirectiveInterpretation(BaseModel):
 
 
 class HourlyPlanEntry(BaseModel):
+    _flexible_loads: dict[str, float] = PrivateAttr(default_factory=dict)
+
     hour: int = Field(..., ge=0, le=23)
     grid_kwh: float = Field(..., ge=0)
     solar_used_kwh: float = Field(..., ge=0)
     battery_action: Literal["charge", "discharge", "idle"]
     battery_kwh: float = Field(..., ge=0)
     battery_energy_after_kwh: float = Field(..., ge=0)
+
+    @property
+    def flexible_loads(self) -> dict[str, float]:
+        return self._flexible_loads
 
     @model_validator(mode="after")
     def check_battery_kwh_matches_action(self) -> "HourlyPlanEntry":

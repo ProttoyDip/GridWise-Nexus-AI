@@ -25,7 +25,7 @@ def _solve_future(scenario, directives, supplied_plan=None):
         return supplied_plan, _verified_future(scenario, directives, supplied_plan)
     key = None
     try:
-        key = optimization_cache_key(scenario.scenario_id, scenario.hours, scenario.battery, directives)
+        key = optimization_cache_key(scenario.scenario_id, scenario.hours, scenario.battery, directives, scenario.flexible_loads)
         cached = optimization_cache.get(key)
         if cached is not None:
             totals = _verified_future(scenario, directives, cached.hourly_plan)

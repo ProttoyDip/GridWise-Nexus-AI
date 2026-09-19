@@ -60,6 +60,8 @@ def verify_schedule(scenario: ScenarioRequest, response: OptimizeResponse) -> No
     forecast = {h.hour: h for h in scenario.hours}
     battery = scenario.battery
     previous = battery.initial_energy_kwh
+    flexible_totals = {load.name: 0.0 for load in scenario.flexible_loads}
+    flexible_by_name = {load.name: load for load in scenario.flexible_loads}
     for entry in response.hourly_plan:
         h = forecast[entry.hour]
         prefix = f"Hour {entry.hour}: "
@@ -70,9 +72,17 @@ def verify_schedule(scenario: ScenarioRequest, response: OptimizeResponse) -> No
         _require(entry.battery_action != "idle" or entry.battery_kwh == 0, prefix + "idle battery must have zero flow")
         charge = entry.battery_kwh if entry.battery_action == "charge" else 0
         discharge = entry.battery_kwh if entry.battery_action == "discharge" else 0
-        _require(_equal(entry.grid_kwh + entry.solar_used_kwh + discharge, h.demand_kwh + charge), prefix + "energy balance violated")
+        _require(set(entry.flexible_loads).issubset(flexible_by_name), prefix + "unknown flexible load")
+        _require(all(math.isfinite(value) and value >= 0 for value in entry.flexible_loads.values()), prefix + "invalid flexible load energy")
+        flexible_energy = math.fsum(entry.flexible_loads.values())
+        for name, value in entry.flexible_loads.items():
+            load = flexible_by_name[name]
+            _require(load.earliest_hour <= entry.hour <= load.latest_hour, prefix + f"{name} scheduled outside its window")
+            _require(_at_most(value, load.max_power_kwh_per_hour), prefix + f"{name} power limit exceeded")
+            flexible_totals[name] += value
+        _require(_equal(entry.grid_kwh + entry.solar_used_kwh + discharge, h.demand_kwh + flexible_energy + charge), prefix + "energy balance violated")
         _require(_at_most(entry.solar_used_kwh, h.solar_kwh), prefix + "solar forecast exceeded")
-        _require(_equal(entry.battery_energy_after_kwh, previous + charge - discharge), prefix + "battery continuity violated")
+        _require(_equal(entry.battery_energy_after_kwh, previous + charge * battery.charge_efficiency - discharge / battery.discharge_efficiency), prefix + "battery continuity violated")
         _require(_at_most(battery.minimum_energy_kwh, entry.battery_energy_after_kwh) and _at_most(entry.battery_energy_after_kwh, battery.capacity_kwh), prefix + "battery bounds violated")
         _require(_at_most(charge, battery.max_charge_kwh_per_hour), prefix + "charge limit exceeded")
         _require(_at_most(discharge, battery.max_discharge_kwh_per_hour), prefix + "discharge limit exceeded")
@@ -93,6 +103,8 @@ def verify_schedule(scenario: ScenarioRequest, response: OptimizeResponse) -> No
                 compliant = _at_most(entry.grid_kwh, adjustment["max_grid_kwh"])
             _require(compliant, prefix + f"{kind} directive violated")
         previous = entry.battery_energy_after_kwh
+    for load in scenario.flexible_loads:
+        _require(_equal(flexible_totals[load.name], load.energy_kwh), f"Flexible load {load.name} energy requirement not met")
     _require(_equal(previous, battery.initial_energy_kwh), "End-of-day battery energy differs from initial energy")
     totals = recalculate_totals(scenario.hours, response.hourly_plan)
     for name in ("total_grid_kwh", "total_cost_bdt", "peak_grid_kwh"):

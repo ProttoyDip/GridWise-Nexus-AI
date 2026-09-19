@@ -3,5 +3,6 @@ import App from "./App";
 import "./index.css";
 import "./polish.css";
 import "./history.css";
+import "./operations.css";
 
 createRoot(document.getElementById("root")!).render(<App />);

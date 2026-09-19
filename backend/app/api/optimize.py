@@ -96,7 +96,11 @@ def _verified_response(
         hourly_plan=plan, total_grid_kwh=totals.total_grid_kwh,
         total_cost_bdt=totals.total_cost_bdt if cached_cost is None else cached_cost,
         peak_grid_kwh=totals.peak_grid_kwh,
-        plan_summary="Minimum grid-cost schedule satisfying validated directives and battery limits.",
+        plan_summary=(
+            "Minimum operating-cost schedule including configured battery wear, while satisfying validated directives and battery limits."
+            if payload.battery.degradation_cost_bdt_per_kwh > 0
+            else "Minimum grid-cost schedule satisfying validated directives and battery limits."
+        ),
     )
     verify_schedule(payload, response)
     return response
@@ -128,7 +132,7 @@ def optimize_energy(payload: ScenarioRequest) -> OptimizeResponse:
                 logger.warning("Optional future generation failed (%s)", type(exc).__name__)
         key = None
         try:
-            key = optimization_cache_key(payload.scenario_id, payload.hours, payload.battery, directives)
+            key = optimization_cache_key(payload.scenario_id, payload.hours, payload.battery, directives, payload.flexible_loads)
             cached = optimization_cache.get(key)
             if cached is not None:
                 try:

@@ -1,0 +1,90 @@
+/* Operator workflows: instruction preview and deterministic conflict diagnosis. */
+.instruction-review { margin-top: 16px; padding: 20px 22px; }
+.instruction-review-head { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.instruction-review-head h2 { margin: 5px 0 4px; }
+.instruction-review-head p { margin: 0; color: #7d89a4; font-size: 12px; }
+.instruction-analysis-body { display: grid; gap: 12px; margin-top: 16px; }
+.instruction-analysis-error, .feasibility-banner { display: flex; align-items: flex-start; gap: 9px; margin-top: 14px; padding: 11px 13px; border: 1px solid rgba(255, 156, 110, .28); border-radius: 8px; color: #ffb29c; background: rgba(119, 54, 40, .12); font-size: 12px; }
+.feasibility-banner { margin-top: 0; }
+.feasibility-banner.is-feasible { color: #82e8c6; border-color: rgba(85, 230, 188, .24); background: rgba(46, 119, 100, .1); }
+.feasibility-banner > div { display: flex; flex-direction: column; gap: 2px; }
+.feasibility-banner span { color: #aab4c8; }
+.directive-preview-list { display: grid; gap: 7px; }
+.directive-preview { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 10px 11px; border: 1px solid rgba(121, 137, 183, .13); border-radius: 8px; background: rgba(8, 13, 23, .3); }
+.directive-preview.is-conflicted { border-color: rgba(255, 156, 110, .36); }
+.directive-preview-number { display: grid; width: 26px; height: 26px; place-items: center; border-radius: 7px; color: #aeb9ff; background: rgba(124, 141, 255, .12); font: 700 11px "DM Mono", monospace; }
+.directive-preview-copy { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.directive-preview-copy strong { color: #e5e9f5; font-size: 12px; }
+.directive-preview-copy span { color: #a5b1c9; font: 10px "DM Mono", monospace; }
+.directive-preview-copy small { overflow: hidden; color: #74819d; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.conflict-suggestions { padding: 12px 14px; border-left: 2px solid #ff9c6e; color: #d8deec; background: rgba(255, 156, 110, .06); font-size: 12px; }
+.conflict-suggestions ul { margin: 7px 0 0; padding-left: 18px; color: #9da8bd; }
+.conflict-suggestions li + li { margin-top: 4px; }
+html[data-theme="light"] .instruction-review-head p, html[data-theme="light"] .feasibility-banner span, html[data-theme="light"] .directive-preview-copy small { color: #5b6b88; }
+html[data-theme="light"] .directive-preview { background: rgba(240, 244, 253, .75); border-color: rgba(30, 50, 100, .12); }
+html[data-theme="light"] .directive-preview-copy strong { color: #142033; }
+html[data-theme="light"] .directive-preview-copy span { color: #4a5a78; }
+@media (max-width: 680px) { .instruction-review { padding: 16px 14px; }.instruction-review-head { align-items: stretch; flex-direction: column; }.instruction-review-head .button { justify-content: center; }.directive-preview { grid-template-columns: 28px minmax(0, 1fr); }.directive-preview .button { grid-column: 2; justify-self: start; } }
+
+/* Critical-load outage planning. */
+.outage-planner { padding: 22px; }
+.outage-controls { display: grid; grid-template-columns: repeat(3, minmax(130px, 1fr)) auto; align-items: end; gap: 12px; margin-top: 18px; }
+.outage-controls > .button { min-height: 39px; justify-content: center; }
+.outage-results { display: grid; gap: 14px; margin-top: 18px; }
+.outage-verdict { display: flex; align-items: center; gap: 10px; padding: 13px 15px; border: 1px solid rgba(255, 156, 110, .28); border-radius: 8px; color: #ffad95; background: rgba(119, 54, 40, .11); }
+.outage-verdict.is-feasible { color: #82e8c6; border-color: rgba(85, 230, 188, .25); background: rgba(46, 119, 100, .1); }
+.outage-verdict div { display: flex; flex-direction: column; }
+.outage-verdict span { color: #9aa6bd; font-size: 11px; }
+.outage-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+.outage-metrics > div { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 4px 8px; padding: 12px; border: 1px solid rgba(121, 137, 183, .14); border-radius: 8px; background: rgba(8, 13, 23, .28); }
+.outage-metrics svg { grid-row: span 2; color: #8f9cff; }
+.outage-metrics span { color: #74819d; font-size: 10px; }
+.outage-metrics strong { color: #dce2f0; font: 700 13px "DM Mono", monospace; }
+.outage-hour-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); gap: 6px; }
+.outage-hour-strip > div { display: flex; flex-direction: column; gap: 2px; padding: 9px; border: 1px solid rgba(85, 230, 188, .18); border-radius: 7px; background: rgba(46, 119, 100, .07); }
+.outage-hour-strip > div.is-unserved { border-color: rgba(255, 156, 110, .28); background: rgba(119, 54, 40, .09); }
+.outage-hour-strip span { color: #74819d; font: 9px "DM Mono", monospace; }
+.outage-hour-strip strong { color: #9edfc9; font-size: 10px; }
+.outage-hour-strip .is-unserved strong { color: #ffad95; }
+html[data-theme="light"] .outage-metrics > div { background: #f7f9fd; }
+html[data-theme="light"] .outage-metrics strong { color: #142033; }
+@media (max-width: 820px) { .outage-controls { grid-template-columns: repeat(2, 1fr); }.outage-controls > .button { grid-column: 1 / -1; } }
+@media (max-width: 520px) { .outage-planner { padding: 16px 14px; }.outage-controls, .outage-metrics { grid-template-columns: 1fr; } }
+
+/* Remaining-day replanning. */
+.replan-panel { display: grid; grid-template-columns: minmax(210px, .8fr) minmax(420px, 1.2fr); gap: 22px; margin-top: 16px; padding: 20px 22px; }
+.replan-copy h2 { margin: 5px 0 4px; }
+.replan-copy p { margin: 0; color: #7d89a4; font-size: 12px; }
+.replan-controls { display: grid; grid-template-columns: 1fr 1fr auto; align-items: end; gap: 9px; }
+.replan-controls .field-label > span { display: flex; align-items: center; gap: 5px; }
+.replan-controls > .button { min-height: 39px; justify-content: center; }
+.replan-result { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(3, 1fr) auto; align-items: center; gap: 9px; padding-top: 14px; border-top: 1px solid rgba(121, 137, 183, .13); }
+.replan-result > div { display: flex; flex-direction: column; gap: 3px; }
+.replan-result span { color: #74819d; font-size: 10px; }
+.replan-result strong { color: #dce2f0; font: 700 13px "DM Mono", monospace; }
+html[data-theme="light"] .replan-copy p, html[data-theme="light"] .replan-result span { color: #5b6b88; }
+html[data-theme="light"] .replan-result strong { color: #142033; }
+@media (max-width: 900px) { .replan-panel { grid-template-columns: 1fr; }.replan-controls { grid-template-columns: 1fr 1fr; }.replan-controls > .button { grid-column: 1 / -1; }.replan-result { grid-column: 1; } }
+@media (max-width: 560px) { .replan-panel { padding: 16px 14px; }.replan-controls, .replan-result { grid-template-columns: 1fr; }.replan-controls > .button { grid-column: 1; } }
+
+/* Shiftable equipment inputs and optimized assignments. */
+.flexible-load-list { display: grid; gap: 8px; }
+.flexible-load-row { display: grid; grid-template-columns: minmax(150px, 1.4fr) repeat(4, minmax(85px, 1fr)) auto; align-items: end; gap: 8px; padding: 10px; border: 1px solid rgba(121, 137, 183, .13); border-radius: 8px; background: rgba(8, 13, 23, .25); }
+.flexible-load-row label { display: flex; min-width: 0; flex-direction: column; gap: 5px; color: #74819d; font: 9px "DM Mono", monospace; text-transform: uppercase; }
+.flexible-load-row label > input { width: 100%; height: 36px; padding: 0 9px; border: 1px solid rgba(121, 137, 183, .18); border-radius: 7px; color: #dce2f0; background: rgba(7, 11, 20, .5); }
+.flexible-load-row > .icon-button { margin-bottom: 2px; }
+.flex-schedule { display: grid; gap: 7px; margin-top: 14px; }
+.flex-schedule-row { display: grid; grid-template-columns: minmax(130px, 1fr) 3fr; align-items: center; gap: 12px; }
+.flex-schedule-row > strong { color: #aeb8cc; font-size: 11px; }
+.flex-schedule-hours { display: flex; flex-wrap: wrap; gap: 5px; }
+.flex-schedule-hours span { padding: 4px 6px; border: 1px solid rgba(85, 230, 188, .2); border-radius: 6px; color: #8bdac2; background: rgba(46, 119, 100, .08); font: 9px "DM Mono", monospace; }
+html[data-theme="light"] .flexible-load-row { background: #f7f9fd; }
+html[data-theme="light"] .flexible-load-row label > input { color: #142033; background: #fff; }
+@media (max-width: 900px) { .flexible-load-row { grid-template-columns: repeat(2, 1fr); }.flexible-load-row > .icon-button { justify-self: end; } }
+@media (max-width: 560px) { .flexible-load-row { grid-template-columns: 1fr; }.flex-schedule-row { grid-template-columns: 1fr; } }
+
+/* Hourly CSV import feedback. */
+.visually-hidden { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
+.csv-status { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0 0; padding: 9px 11px; border: 1px solid rgba(85, 230, 188, .23); border-radius: 7px; color: #9ee4ce; background: rgba(46, 119, 100, .08); font-size: 11px; }
+.csv-status.is-error { color: #ffb29c; border-color: rgba(255, 156, 110, .28); background: rgba(119, 54, 40, .1); }
+.csv-status button { display: grid; flex: 0 0 auto; padding: 3px; border: 0; color: currentColor; background: transparent; cursor: pointer; }
