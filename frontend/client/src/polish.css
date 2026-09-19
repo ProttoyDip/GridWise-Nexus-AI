@@ -105,7 +105,7 @@ html[data-theme="light"] .hero-copy p, html[data-theme="light"] .panel-heading p
 html[data-theme="light"] .why-list li, html[data-theme="light"] .plan-footer p, html[data-theme="light"] .timeline-body p, html[data-theme="light"] .why-lead,
 html[data-theme="light"] .comparison-prompt p, html[data-theme="light"] .meter-top, html[data-theme="light"] .twin-reply, html[data-theme="light"] .why-battery,
 html[data-theme="light"] .empty-result p, html[data-theme="light"] .twin-outcome small { color: #4a5a78; }
-html[data-theme="light"] .brand-subtitle, html[data-theme="light"] .api-endpoint, html[data-theme="light"] .hero-health span, html[data-theme="light"] .hero-health small,
+html[data-theme="light"] .brand-subtitle, html[data-theme="light"] .hero-health span, html[data-theme="light"] .hero-health small,
 html[data-theme="light"] .stat-label, html[data-theme="light"] .stat-meta, html[data-theme="light"] .field-label, html[data-theme="light"] .footer,
 html[data-theme="light"] .status-indicator-copy small, html[data-theme="light"] .submit-context small, html[data-theme="light"] .hero-kicker, html[data-theme="light"] .eyebrow,
 html[data-theme="light"] .section-divider, html[data-theme="light"] .hours-table th, html[data-theme="light"] .plan-table-header, html[data-theme="light"] .directive-index,
@@ -230,3 +230,5 @@ html[data-theme="light"] ::selection { color: #fff; background: #3b52e0; }
 .input-shell select option { color: #142033; }
 @media (max-width: 820px) { .input-shell select { font-size: 14px; min-height: 40px; } }
 @media (max-width: 560px) { .json-loader-wrap .button { justify-content: center; } }
+.meter-note { margin: 14px 0 0; color: #74819d; font: 10px "DM Mono", monospace; }
+html[data-theme="light"] .meter-note { color: #5b6b88; }

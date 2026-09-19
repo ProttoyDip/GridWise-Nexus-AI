@@ -75,3 +75,38 @@ def test_protection_windows_are_contiguous_not_one_giant_span():
         plan[h]["battery_energy_after_kwh"] = 30.0
     prot = [a for a in generate_daily_actions(plan, _hours(), BATTERY)["daily_actions"] if a["type"] == "BATTERY_PROTECTION"]
     assert [(a["start_time"], a["end_time"]) for a in prot] == [("01:00", "03:00"), ("20:00", "22:00")]
+
+
+def _real_result():
+    from app.api.optimize import optimize_energy
+    from app.models.request import ScenarioRequest
+
+    scenario = ScenarioRequest.model_validate({
+        "scenario_id": "REL-1",
+        "operator_notes": ["No special operating conditions today"],
+        "hours": _hours(),
+        "battery": {"capacity_kwh": 200, "initial_energy_kwh": 100, "minimum_energy_kwh": 30,
+                    "max_charge_kwh_per_hour": 50, "max_discharge_kwh_per_hour": 50},
+    })
+    return scenario, optimize_energy(scenario)
+
+
+def test_reliability_is_measured_from_a_real_result():
+    from app.scheduler.reliability import compute_reliability
+
+    scenario, result = _real_result()
+    rel = compute_reliability(scenario, result)
+    assert rel["constraint_validation"] == 100.0
+    assert rel["optimization_validity"] == 100.0
+    assert rel["checks_run"] > 100
+
+
+def test_reliability_detects_a_tampered_plan():
+    from app.scheduler.reliability import compute_reliability
+
+    scenario, result = _real_result()
+    bad = result.model_copy(deep=True)
+    bad.hourly_plan[5].grid_kwh += 10
+    rel = compute_reliability(scenario, bad)
+    assert rel["constraint_validation"] < 100.0
+    assert rel["optimization_validity"] < 100.0

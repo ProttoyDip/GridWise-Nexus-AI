@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
-import { AlertTriangle, ArrowRight, Clock3, Cpu, LayoutDashboard, Loader2, Moon, Network, Play, RadarIcon, RefreshCw, ShieldCheck, Sparkles, Sun, Terminal, Zap } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock3, Cpu, LayoutDashboard, Loader2, Moon, Play, RadarIcon, RefreshCw, ShieldCheck, Sparkles, Sun, Terminal, Zap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { ActionSchedule } from "@/components/ActionSchedule";
+import { ActionSchedule, useSchedulerInsights } from "@/components/ActionSchedule";
 import { PipelineFlow, ReliabilityPanel } from "@/components/ControlCenterPanels";
 import { AgentStatusPanel } from "@/components/AgentStatusPanel";
 import { BeforeAfterComparison } from "@/components/BeforeAfterComparison";
@@ -70,6 +70,7 @@ export default function Home() {
   const [health, setHealth] = useState<"checking" | "connected" | "disconnected">("checking");
   const [lastHealthCheck, setLastHealthCheck] = useState<Date | null>(null);
   const [activeTab, setActiveTab] = useState<"dashboard" | "twin">("dashboard");
+  const insights = useSchedulerInsights(API_BASE, scenario, result);
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     try { return localStorage.getItem("gridwise-theme") === "light" ? "light" : "dark"; } catch { return "dark"; }
   });
@@ -159,7 +160,7 @@ export default function Home() {
     <div className="ambient ambient-one" /><div className="ambient ambient-two" /><div className="ambient ambient-three" />
     <header className="topbar page-width">
       <div className="brand-lockup"><div className="brand-mark"><Zap size={18} fill="currentColor" /></div><div><div className="brand-name">GridWise <span>Nexus</span></div><div className="brand-subtitle">AI operations center</div></div></div>
-      <div className="topbar-right"><div className="api-endpoint"><Network size={14} /><span>{API_BASE}</span></div><div className={`connection-pill ${health}`}><span className="status-dot" />{healthCopy}</div><button className="theme-toggle" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title={theme === "dark" ? "Light mode" : "Dark mode"}>{theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}</button><button className="icon-button top-icon" type="button" title="Refresh connection" onClick={() => window.location.reload()}><RefreshCw size={15} /></button></div>
+      <div className="topbar-right"><div className={`connection-pill ${health}`}><span className="status-dot" />{healthCopy}</div><button className="theme-toggle" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title={theme === "dark" ? "Light mode" : "Dark mode"}>{theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}</button><button className="icon-button top-icon" type="button" title="Refresh connection" onClick={() => window.location.reload()}><RefreshCw size={15} /></button></div>
     </header>
 
     <main className="page-width main-content">
@@ -207,14 +208,14 @@ export default function Home() {
           {result && !loading && (
             <div className="insight-grid">
               <div className="insight-col">
-                <ActionSchedule apiBase={API_BASE} scenario={scenario} refreshKey={result} />
+                <ActionSchedule actions={insights.actions} failed={insights.failed} />
                 <BeforeAfterComparison apiBase={API_BASE} scenario={scenario} result={result} />
                 <WhyAIDecided result={result} />
               </div>
               <div className="insight-col">
                 <AgentStatusPanel loading={loading} hasResult={Boolean(result)} hasError={Boolean(error)} />
                 <PipelineFlow complete={Boolean(result) && !error} running={loading} />
-                <ReliabilityPanel />
+                <ReliabilityPanel reliability={insights.reliability} />
               </div>
             </div>
           )}

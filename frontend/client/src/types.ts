@@ -62,3 +62,10 @@ export type ScheduledAction = {
   reason: string;
   expected_impact: string;
 };
+
+export type Reliability = {
+  directive_understanding: number | null;
+  constraint_validation: number | null;
+  optimization_validity: number | null;
+  checks_run: number;
+};

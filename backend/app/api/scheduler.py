@@ -11,6 +11,7 @@ from fastapi import APIRouter
 from app.api.optimize import optimize_energy
 from app.models.request import ScenarioRequest
 from app.scheduler import generate_daily_actions
+from app.scheduler.reliability import compute_reliability
 
 router = APIRouter()
 
@@ -19,4 +20,5 @@ router = APIRouter()
 def scheduler_actions(scenario: ScenarioRequest) -> dict[str, Any]:
     result = optimize_energy(scenario)
     payload = scenario.model_dump()
-    return generate_daily_actions(result.hourly_plan, payload["hours"], payload["battery"])
+    actions = generate_daily_actions(result.hourly_plan, payload["hours"], payload["battery"])
+    return {**actions, "reliability": compute_reliability(scenario, result)}

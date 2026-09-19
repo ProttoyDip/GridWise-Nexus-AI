@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { BatteryCharging, BatteryWarning, CalendarClock, ShieldCheck, Sun, TrendingDown, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { Scenario, ScheduledAction } from "@/types";
+import type { Reliability, Scenario, ScheduledAction } from "@/types";
 
 const META: Record<string, { label: string; icon: React.ReactNode; tone: string }> = {
   BATTERY_CHARGE: { label: "Charge Battery", icon: <BatteryCharging size={17} />, tone: "blue" },
@@ -11,23 +11,33 @@ const META: Record<string, { label: string; icon: React.ReactNode; tone: string 
   BATTERY_PROTECTION: { label: "Maintain Minimum Reserve", icon: <ShieldCheck size={17} />, tone: "orange" },
 };
 
-export function ActionSchedule({ apiBase, scenario, refreshKey }: { apiBase: string; scenario: Scenario; refreshKey: unknown }) {
+export function useSchedulerInsights(apiBase: string, scenario: Scenario, refreshKey: unknown) {
   const [actions, setActions] = useState<ScheduledAction[] | null>(null);
+  const [reliability, setReliability] = useState<Reliability | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setActions(null);
+    setReliability(null);
     setFailed(false);
     fetch(`${apiBase}/scheduler/actions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(scenario) })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("bad status"))))
-      .then((data: { daily_actions?: ScheduledAction[] }) => { if (!cancelled) setActions(data.daily_actions ?? []); })
+      .then((data: { daily_actions?: ScheduledAction[]; reliability?: Reliability }) => {
+        if (cancelled) return;
+        setActions(data.daily_actions ?? []);
+        setReliability(data.reliability ?? null);
+      })
       .catch(() => { if (!cancelled) setFailed(true); });
     return () => { cancelled = true; };
     // Re-run only when a new optimization result arrives, not on every scenario edit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey, apiBase]);
 
+  return { actions, reliability, failed };
+}
+
+export function ActionSchedule({ actions, failed }: { actions: ScheduledAction[] | null; failed: boolean }) {
   return (
     <section className="glass-card action-panel" id="action-schedule">
       <div className="panel-heading compact-heading">
