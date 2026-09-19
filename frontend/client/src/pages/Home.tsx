@@ -6,6 +6,8 @@ import { PipelineFlow, ReliabilityPanel } from "@/components/ControlCenterPanels
 import { AgentStatusPanel } from "@/components/AgentStatusPanel";
 import { BeforeAfterComparison } from "@/components/BeforeAfterComparison";
 import { ImpactSummary } from "@/components/ImpactSummary";
+import { RunHistory } from "@/components/RunHistory";
+import { addRun, loadRuns, makeRun, saveRuns, type RunRecord } from "@/lib/history";
 import { DigitalTwinTab } from "@/components/DigitalTwinTab";
 import { ReasoningTimeline } from "@/components/ReasoningTimeline";
 import { ResultsPanel } from "@/components/ResultsPanel";
@@ -71,6 +73,7 @@ export default function Home() {
   const [health, setHealth] = useState<"checking" | "connected" | "disconnected">("checking");
   const [lastHealthCheck, setLastHealthCheck] = useState<Date | null>(null);
   const [activeTab, setActiveTab] = useState<"dashboard" | "twin">("dashboard");
+  const [runs, setRuns] = useState<RunRecord[]>(() => loadRuns());
   const insights = useSchedulerInsights(API_BASE, scenario, result);
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     try { return localStorage.getItem("gridwise-theme") === "light" ? "light" : "dark"; } catch { return "dark"; }
@@ -148,6 +151,7 @@ export default function Home() {
       }
       if (!isOptimizeResponse(payload)) throw new Error("The API response is missing a directive interpretation or hourly plan.");
       setResult(payload);
+      setRuns((current) => { const next = addRun(current, makeRun(scenario, payload)); saveRuns(next); return next; });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to reach the optimization API.");
     } finally {
@@ -203,6 +207,8 @@ export default function Home() {
           </div>
 
           <div className="submit-bar glass-card"><div className="submit-context"><div className="submit-icon"><ShieldCheck size={18} /></div><div><strong>Ready to run <span>{scenario.scenario_id}</span></strong><small>POST /optimize-energy · {scenario.hours.length} hourly intervals · {scenario.operator_notes.length} operator directives</small></div></div><button className="button button-primary submit-button" type="button" onClick={handleSubmit} disabled={loading}>{loading ? <><Loader2 size={17} className="spin" /> Optimizing…</> : <><Play size={15} fill="currentColor" /> Run optimization <ArrowRight size={16} /></>}</button></div>
+
+          <RunHistory runs={runs} onClear={() => { setRuns([]); saveRuns([]); }} />
 
           {error && <motion.div className="error-panel" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}><div className="error-icon"><AlertTriangle size={17} /></div><div><strong>Optimization request needs attention</strong><p>{error}</p></div><button type="button" className="icon-button" onClick={() => setError(null)} aria-label="Dismiss error">×</button></motion.div>}
 
