@@ -5,6 +5,7 @@ import { ActionSchedule, useSchedulerInsights } from "@/components/ActionSchedul
 import { PipelineFlow, ReliabilityPanel } from "@/components/ControlCenterPanels";
 import { AgentStatusPanel } from "@/components/AgentStatusPanel";
 import { BeforeAfterComparison } from "@/components/BeforeAfterComparison";
+import { ImpactSummary } from "@/components/ImpactSummary";
 import { DigitalTwinTab } from "@/components/DigitalTwinTab";
 import { ReasoningTimeline } from "@/components/ReasoningTimeline";
 import { ResultsPanel } from "@/components/ResultsPanel";
@@ -206,6 +207,8 @@ export default function Home() {
           {error && <motion.div className="error-panel" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}><div className="error-icon"><AlertTriangle size={17} /></div><div><strong>Optimization request needs attention</strong><p>{error}</p></div><button type="button" className="icon-button" onClick={() => setError(null)} aria-label="Dismiss error">×</button></motion.div>}
 
           {result && !loading && (
+            <>
+            <ImpactSummary scenario={scenario} result={result} />
             <div className="insight-grid">
               <div className="insight-col">
                 <ActionSchedule actions={insights.actions} failed={insights.failed} scenarioId={scenario.scenario_id} />
@@ -218,6 +221,7 @@ export default function Home() {
                 <ReliabilityPanel reliability={insights.reliability} />
               </div>
             </div>
+            </>
           )}
         </>
       )}

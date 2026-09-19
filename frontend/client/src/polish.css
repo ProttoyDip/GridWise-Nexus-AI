@@ -247,4 +247,21 @@ html[data-theme="light"] .meter-note { color: #5b6b88; }
   html.print-actions .action-panel * { color: #111 !important; animation: none !important; opacity: 1 !important; transform: none !important; }
   html.print-actions .timeline-body { background: #fff; border-color: #bbb; break-inside: avoid; }
   html.print-actions .timeline::before { display: none; }
+  html.print-actions .timeline-icon { background: #fff; border-color: #999; }
 }
+
+/* ---------- Savings & carbon ---------- */
+.impact-panel { margin-top: 16px; padding: 20px 22px; }
+.impact-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.impact-tile { display: flex; flex-direction: column; gap: 4px; padding: 14px; border: 1px solid rgba(121, 137, 183, .14); border-radius: 12px; background: rgba(8, 13, 23, .33); }
+.impact-icon { display: grid; width: 30px; height: 30px; place-items: center; margin-bottom: 6px; border-radius: 9px; color: var(--accent); background: rgba(124, 141, 255, .12); }
+.impact-tile.tone-mint .impact-icon { color: var(--ok); background: rgba(85, 230, 188, .12); }
+.impact-tile.tone-orange .impact-icon { color: var(--warn); background: rgba(255, 156, 110, .12); }
+.impact-tile.tone-violet .impact-icon { color: var(--violet); background: rgba(194, 147, 255, .12); }
+.impact-tile strong { color: #edf0fa; font-size: 20px; letter-spacing: -.03em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.impact-tile small { color: #74819d; font-size: 10px; line-height: 1.4; }
+html[data-theme="light"] .impact-tile { background: rgba(240, 244, 253, .8); border-color: rgba(30, 50, 100, .12); }
+html[data-theme="light"] .impact-tile strong { color: #0f1b30; }
+html[data-theme="light"] .impact-tile small { color: #5b6b88; }
+@media (max-width: 820px) { .impact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 380px) { .impact-grid { grid-template-columns: 1fr; } }
