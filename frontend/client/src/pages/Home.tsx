@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { AlertTriangle, ArrowRight, Clock3, Cpu, LayoutDashboard, Loader2, Moon, Play, RadarIcon, RefreshCw, ShieldCheck, Sparkles, Sun, Terminal, Zap } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { ActionSchedule, useSchedulerInsights } from "@/components/ActionSchedule";
 import { PipelineFlow, ReliabilityPanel, pipelineStates } from "@/components/ControlCenterPanels";
 import { AgentStatusPanel } from "@/components/AgentStatusPanel";
@@ -11,14 +11,17 @@ import { setCopilotContext } from "@/lib/copilotContext";
 import { ImpactSummary } from "@/components/ImpactSummary";
 import { RunHistory } from "@/components/RunHistory";
 import { addRun, loadRuns, makeRun, saveRuns, type RunRecord } from "@/lib/history";
-import { DigitalTwinTab } from "@/components/DigitalTwinTab";
 import { ReasoningTimeline } from "@/components/ReasoningTimeline";
-import { ResultsPanel } from "@/components/ResultsPanel";
 import { ScenarioBuilder } from "@/components/ScenarioBuilder";
 import { SystemStatusBar } from "@/components/SystemStatusBar";
 import { WhyAIDecided } from "@/components/WhyAIDecided";
 import type { HourInput, OptimizeResponse, Scenario } from "@/types";
 import samplePack from "@/data/sampleCases.json";
+
+// Charts and the twin tab are heavy and not needed for first paint.
+const ResultsPanel = lazy(() => import("@/components/ResultsPanel").then((m) => ({ default: m.ResultsPanel })));
+const DigitalTwinTab = lazy(() => import("@/components/DigitalTwinTab").then((m) => ({ default: m.DigitalTwinTab })));
+const PanelFallback = () => <div className="glass-card panel-fallback" aria-busy="true"><div className="loading-stack"><div className="loading-bar wide" /><div className="loading-bar" /></div></div>;
 
 const OPERATOR_PRESETS = [
   { label: "Solar maintenance", note: "Facilities will wash the rooftop solar panels from noon until 2 PM. Treat usable solar as roughly 25% of forecast during that window." },
@@ -177,7 +180,7 @@ export default function Home() {
       </div>
 
       {activeTab === "twin" ? (
-        <DigitalTwinTab apiBase={API_BASE} scenario={scenario} />
+        <Suspense fallback={<PanelFallback />}><DigitalTwinTab apiBase={API_BASE} scenario={scenario} /></Suspense>
       ) : (
         <>
           <section className="glass-card command-center">
@@ -198,7 +201,7 @@ export default function Home() {
 
           <div className="workspace-grid">
             <div className="builder-column"><ScenarioBuilder scenario={scenario} onChange={setScenario} onRandomize={() => { setScenario(randomizedFromPack()); setResult(null); setError(null); }} onLoadJson={loadJson} onLoadSampleCase={loadSampleCase} sampleJson={sampleJson} /></div>
-            <div className="results-column"><ResultsPanel result={result} loading={loading} battery={scenario.battery} /></div>
+            <div className="results-column"><Suspense fallback={<PanelFallback />}><ResultsPanel result={result} loading={loading} battery={scenario.battery} /></Suspense></div>
           </div>
 
 

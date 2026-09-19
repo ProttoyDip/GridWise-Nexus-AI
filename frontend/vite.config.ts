@@ -16,6 +16,18 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // Long-lived vendor chunks cache across deploys; charts load only with the results view.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (/recharts|d3-|victory-vendor|decimal\.js-light|internmap/.test(id)) return "vendor-charts";
+          if (/framer-motion|motion-dom|motion-utils/.test(id)) return "vendor-motion";
+          if (/react-dom|[\/]react[\/]|scheduler/.test(id)) return "vendor-react";
+          return undefined;
+        },
+      },
+    },
   },
   server: {
     port: 3000,

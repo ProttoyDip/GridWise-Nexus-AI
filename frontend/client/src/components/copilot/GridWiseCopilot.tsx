@@ -1,7 +1,9 @@
 import { AnimatePresence } from "framer-motion";
+import { lazy, Suspense } from "react";
 import AICopilotBubble from "./AICopilotBubble";
-import AICopilotWindow from "./AICopilotWindow";
 import { useCopilotChat } from "./useCopilotChat";
+
+const AICopilotWindow = lazy(() => import("./AICopilotWindow"));
 
 /**
  * Floating AI Energy Copilot — mount once near the root of the app
@@ -16,6 +18,7 @@ export default function GridWiseCopilot() {
       <AICopilotBubble status={status} unreadCount={unreadCount} isOpen={isOpen} onClick={toggle} />
       <AnimatePresence>
         {isOpen && (
+          <Suspense fallback={null}>
           <AICopilotWindow
             messages={messages}
             status={status}
@@ -23,6 +26,7 @@ export default function GridWiseCopilot() {
             onSend={sendMessage}
             onClose={close}
           />
+          </Suspense>
         )}
       </AnimatePresence>
     </>
