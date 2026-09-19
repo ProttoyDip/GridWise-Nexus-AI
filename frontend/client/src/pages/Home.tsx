@@ -6,6 +6,7 @@ import { PipelineFlow, ReliabilityPanel, pipelineStates } from "@/components/Con
 import { AgentStatusPanel } from "@/components/AgentStatusPanel";
 import { BeforeAfterComparison } from "@/components/BeforeAfterComparison";
 import { optimizeWithProgress, type StageMap } from "@/lib/optimizeStream";
+import { AlertsPanel } from "@/components/AlertsPanel";
 import { ImpactSummary } from "@/components/ImpactSummary";
 import { RunHistory } from "@/components/RunHistory";
 import { addRun, loadRuns, makeRun, saveRuns, type RunRecord } from "@/lib/history";
@@ -207,6 +208,7 @@ export default function Home() {
 
           {result && !loading && (
             <>
+            <AlertsPanel scenario={scenario} result={result} />
             <ImpactSummary scenario={scenario} result={result} />
             <div className="insight-grid">
               <div className="insight-col">

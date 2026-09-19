@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Brain, Zap } from "lucide-react";
 import { useState } from "react";
+import { useAlertCount } from "@/lib/alerts";
 import type { CopilotStatus } from "./types";
 
 interface AICopilotBubbleProps {
@@ -12,6 +13,8 @@ interface AICopilotBubbleProps {
 
 export default function AICopilotBubble({ status, unreadCount, isOpen, onClick }: AICopilotBubbleProps) {
   const [showTooltip, setShowTooltip] = useState(false);
+  const alertCount = useAlertCount();
+  const alerting = alertCount > 0 && status === "idle" && !isOpen;
 
   return (
     <div className={`fixed bottom-5 right-5 z-[60] flex flex-col items-end gap-2 ${isOpen ? "max-sm:hidden" : ""}`}>
@@ -23,7 +26,7 @@ export default function AICopilotBubble({ status, unreadCount, isOpen, onClick }
             exit={{ opacity: 0, x: 8 }}
             className="rounded-lg border border-white/10 bg-[#0a0f1c]/95 px-3 py-1.5 text-xs font-medium text-slate-200 shadow-xl backdrop-blur-md"
           >
-            Ask GridWise AI
+            {alerting ? `${alertCount} alert${alertCount > 1 ? "s" : ""} to review` : "Ask GridWise AI"}
           </motion.div>
         )}
       </AnimatePresence>
@@ -36,7 +39,7 @@ export default function AICopilotBubble({ status, unreadCount, isOpen, onClick }
         onMouseLeave={() => setShowTooltip(false)}
         whileHover={{ scale: 1.06 }}
         whileTap={{ scale: 0.94 }}
-        className="relative flex h-14 w-14 items-center justify-center rounded-full border border-cyan-400/30 bg-gradient-to-br from-[#0a1830] to-[#071022] text-cyan-300 shadow-[0_0_30px_-5px_rgba(34,211,238,0.5)]"
+        className={`relative flex h-14 w-14 items-center justify-center rounded-full border bg-gradient-to-br from-[#0a1830] to-[#071022] ${alerting ? "border-amber-400/60 text-amber-300 shadow-[0_0_30px_-5px_rgba(251,191,36,0.55)]" : "border-cyan-400/30 text-cyan-300 shadow-[0_0_30px_-5px_rgba(34,211,238,0.5)]"}`}
       >
         {/* Animated pulse ring, idle only */}
         {status === "idle" && (
@@ -73,6 +76,10 @@ export default function AICopilotBubble({ status, unreadCount, isOpen, onClick }
             </motion.span>
           )}
         </AnimatePresence>
+
+        {alerting && unreadCount === 0 && (
+          <span aria-hidden className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-amber-400 px-1 text-[10px] font-bold text-slate-900 shadow-md">{alertCount}</span>
+        )}
 
         {unreadCount > 0 && (
           <motion.span
