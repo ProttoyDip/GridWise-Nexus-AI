@@ -2,7 +2,7 @@
 
 **An LLM-assisted campus energy optimization platform** — built for the BUP CSE Fest 2026 Hackathon (Online Preliminary), in association with Poridhi.
 
-GridWise interprets natural-language operator notes (e.g. *"Solar output will drop to about 20% from 1 PM to 3 PM"*), converts them into structured, machine-checkable directives, validates them deterministically, and produces a cost-minimizing 24-hour campus energy schedule that respects every applicable constraint. A React operator dashboard, a conversational AI Copilot, and a digital-twin what-if simulator sit on top of the same verified pipeline — none of them re-implement or bypass it.
+GridWise interprets natural-language operator notes (e.g. *"Solar output will drop to about 20% from 1 PM to 3 PM"*), converts them into structured, machine-checkable directives, validates them deterministically, and produces a cost-minimizing 24-hour campus energy schedule that respects every applicable constraint. A React AI Energy Operations Control Center, a conversational AI Copilot, an AI Action Scheduler, and a digital-twin what-if simulator sit on top of the same verified pipeline — none of them re-implement or bypass it.
 
 ---
 
@@ -17,6 +17,11 @@ The complete optimization pipeline is implemented and deployed: `POST /optimize-
 | `GET /llm/status` — configured providers and models | ✅ Implemented |
 | `GET /system/status` — provider health, circuit-breaker state, optimizer availability | ✅ Implemented |
 | `POST /optimize-energy` — complete pipeline | ✅ Implemented |
+| `POST /analyze-scenario` — directive preview and conflict diagnosis | ✅ Implemented |
+| `POST /resilience/outage` — critical-load survival planning | ✅ Implemented |
+| `POST /replan` — remaining-day optimization from measured battery energy | ✅ Implemented |
+| `POST /scheduler/actions` — operator action timeline and measured reliability metrics | ✅ Implemented |
+| `POST /optimize-energy/stream` — real pipeline stage events, then the result (NDJSON) | ✅ Implemented |
 | LLM operator-note interpreter | ✅ Implemented |
 | Deterministic guardrails | ✅ Implemented |
 | Energy schedule optimizer | ✅ PuLP/CBC solver implemented |
@@ -31,11 +36,14 @@ The complete optimization pipeline is implemented and deployed: `POST /optimize-
 | LLM evaluation and measured defaults | ✅ All 34 candidates reported; 32 benchmarked with available credentials |
 | Prompt evaluation | ✅ Three versioned prompts, public-sample scoring and ranking report |
 | Judge simulator | ✅ Independent API, interpretation, physics, cost and optimum checks |
-| Unit, API, and public sample tests | ✅ 830 offline tests collected (includes Copilot); 10 live sample tests passed in the earlier live run |
+| Unit, API, and public sample tests | ✅ 843 offline tests passed, 10 optional tests skipped; 10 live sample tests passed in the earlier live run |
 | Docker packaging | ✅ Non-root image, build-time CBC solver self-check |
 | Deployment (backend) | ✅ Live on Render (Docker web service) |
-| React operator dashboard | ✅ Implemented and deployed — scenario builder, results panel, digital twin tab |
-| AI Energy Copilot (`POST /copilot/chat`) | ✅ Implemented and deployed — floating chat assistant over the existing pipeline |
+| AI Action Scheduler | ✅ Converts a verified plan into a timed action list; never changes the plan |
+| React AI Energy Operations Control Center | ✅ Implemented — scenario builder, action schedule, savings and carbon, alerts, run history, light/dark theme, digital twin tab |
+| AI Energy Copilot (`POST /copilot/chat`) | ✅ Implemented — floating chat assistant with schedule and app-guide intents, voice input, and dashboard context |
+| Frontend unit tests | ✅ Vitest suite for impact, alert, export, history, pipeline, and streaming logic |
+| Accessibility | ✅ axe-core clean in both themes; text contrast measured against rendered backgrounds |
 
 ---
 
@@ -70,7 +78,15 @@ Operator notes are natural language and are never trusted directly as math. They
                            ▼
                     API Response
         (directive_interpretation + hourly_plan)
+                           │
+                           ▼
+                 ┌──────────────────┐
+                 │  Action Scheduler  │  Turns the verified plan into
+                 │  (read-only layer) │──▶ operator actions: what to do,
+                 └──────────────────┘   when, and why
 ```
+
+The scheduler, savings/carbon summary, alerts, and reliability metrics are read-only layers on the verified result. They never alter the optimizer, directive interpretation, validation, or any existing API.
 
 ## Project Structure
 
@@ -84,6 +100,11 @@ GridWise-Nexus-AI/
 │   │   │   ├── llm_status.py   # GET /llm/status
 │   │   │   ├── system_status.py# GET /system/status (providers, breaker, optimizer)
 │   │   │   ├── optimize.py     # POST /optimize-energy (complete pipeline)
+│   │   │   ├── optimize_stream.py # POST /optimize-energy/stream (real stage events)
+│   │   │   ├── scheduler.py    # POST /scheduler/actions (actions + reliability)
+│   │   │   ├── analysis.py     # POST /analyze-scenario (directive preview, conflicts)
+│   │   │   ├── resilience.py   # POST /resilience/outage (critical-load planning)
+│   │   │   ├── replan.py       # POST /replan (remaining-day optimization)
 │   │   │   └── copilot.py      # POST /copilot/chat (conversational layer)
 │   │   ├── models/
 │   │   │   ├── request.py      # Request schema + validation (Pydantic)
@@ -107,8 +128,16 @@ GridWise-Nexus-AI/
 │   │   ├── simulation/
 │   │   │   ├── scenario_generator.py # Bounded what-if uncertainty factors
 │   │   │   └── simulator.py    # Digital-twin stress test against the verified plan
+│   │   ├── scheduler/          # AI Action Scheduler — read-only, works on the verified plan
+│   │   │   ├── schedule_analyzer.py # Groups the plan into charge/discharge/solar/reserve windows
+│   │   │   ├── action_generator.py  # Builds the meaningful action timeline
+│   │   │   ├── action_explainer.py  # Reason and expected-impact text per action
+│   │   │   └── reliability.py       # Measured directive/constraint/optimization metrics
+│   │   ├── diagnostics/        # Joint-feasibility check and minimal conflicting note set
+│   │   ├── resilience/         # Outage survival planning for essential loads
+│   │   ├── replanning/         # Locks completed hours, re-solves the remainder
 │   │   ├── copilot/            # Conversational layer — wraps existing services only
-│   │   │   ├── intent_router.py       # Deterministic regex intent classification
+│   │   │   ├── intent_router.py       # Deterministic regex intent classification (7 intents)
 │   │   │   ├── tool_manager.py        # Calls optimizer/explainability/simulation directly
 │   │   │   ├── conversation_memory.py # In-memory per-session TTL memory
 │   │   │   ├── response_generator.py  # Formats real results into chat replies
@@ -124,15 +153,25 @@ GridWise-Nexus-AI/
 │   ├── client/src/
 │   │   ├── pages/Home.tsx       # Operator dashboard (tabs, status bar, workspace)
 │   │   ├── components/
-│   │   │   ├── ScenarioBuilder.tsx      # Scenario editor + public sample pack loader
+│   │   │   ├── ScenarioBuilder.tsx      # Scenario editor + public sample pack loader + CSV import
 │   │   │   ├── ResultsPanel.tsx         # Directive cards, dispatch + battery SoC charts
 │   │   │   ├── SystemStatusBar.tsx      # LLM / optimizer / simulation indicators
-│   │   │   ├── ReasoningTimeline.tsx    # AI reasoning steps during optimization
-│   │   │   ├── BeforeAfterComparison.tsx# Baseline vs. operator-directed comparison
+│   │   │   ├── ReasoningTimeline.tsx    # Live optimization steps from real backend stage events
+│   │   │   ├── ActionSchedule.tsx       # AI Action Schedule timeline + copy/CSV/print export
+│   │   │   ├── AlertsPanel.tsx          # Operator alerts derived from the real plan
+│   │   │   ├── ImpactSummary.tsx        # Cost saved, grid avoided, CO₂, solar utilised
+│   │   │   ├── RunHistory.tsx           # Persisted runs with side-by-side comparison
+│   │   │   ├── BeforeAfterComparison.tsx# Constraint Impact Analysis
 │   │   │   ├── WhyAIDecided.tsx         # Explainability panel from the real response
-│   │   │   ├── AgentStatusPanel.tsx     # Pipeline stage status, driven by real state
+│   │   │   ├── AgentStatusPanel.tsx     # AI Energy Orchestrator (five agents)
+│   │   │   ├── ControlCenterPanels.tsx  # AI Pipeline and AI Reliability panels
+│   │   │   ├── InstructionReview.tsx    # Directive preview and conflict diagnosis
+│   │   │   ├── OutagePlanner.tsx        # Critical-load outage planning
+│   │   │   ├── MiddayReplanner.tsx      # Remaining-day replanning
 │   │   │   ├── DigitalTwinTab.tsx       # What-if simulation via /copilot/chat
-│   │   │   └── copilot/                 # Floating AI Energy Copilot chat widget
+│   │   │   └── copilot/                 # Floating AI Copilot: bubble, chat window, voice input
+│   │   ├── lib/                         # Pure, unit-tested logic: impact, alerts, history, export, streaming
+│   │   ├── polish.css / alerts.css / history.css / operations.css  # Design system layers, themes, phone breakpoints
 │   │   └── data/sampleCases.json  # Copy of the public sample pack used by the UI
 │   ├── render.yaml / Dockerfile   # Static-site build (npm run build → dist/public)
 │   └── package.json
@@ -166,9 +205,9 @@ Verified optimization results have a separate process-local cache in `app/optimi
 
 Overlapping solar and grid caps enforce the smallest limit; overlapping reserves enforce the largest floor, including the base battery minimum. Solar factors apply to the original forecast. Contradictory directives remain hard constraints and can make the schedule infeasible.
 
-The solver minimizes `sum(grid_kwh × tariff_bdt_per_kwh)` with non-negative grid import, forecast-limited solar use, hourly energy balance, battery energy continuity, capacity and minimum-energy bounds, and charge/discharge rate limits. Charging and discharging cannot occur simultaneously. Hour 23 ends at the initial battery energy. Battery operation is lossless, grid export is forbidden, and excess solar may be curtailed.
+The solver minimizes grid energy cost plus an optional battery-throughput wear cost, with non-negative grid import, forecast-limited solar use, hourly energy balance, battery energy continuity, capacity and minimum-energy bounds, and charge/discharge rate limits. Optional flexible loads receive exact daily-energy and operating-window constraints. Charge and discharge efficiencies default to `1.0` for competition compatibility; realistic values automatically enable mutually exclusive battery modes. Hour 23 ends at the initial battery energy, grid export is forbidden, and excess solar may be curtailed.
 
-The default solver uses an equivalent linear program instead of 24 binary action variables. Any simultaneous charge/discharge is cancelled by the smaller amount: net battery energy, energy balance, solar/grid use, and cost are preserved, and both rate usages decrease. This preserves every current directive, so the returned exclusive-action schedule has the same minimum cost as the original mixed-integer model. This argument depends on the current lossless battery and objective; efficiency losses or action-dependent costs would require revisiting the formulation.
+With default lossless battery settings, the solver uses an equivalent linear program instead of 24 binary action variables. Any simultaneous charge/discharge is cancelled by the smaller amount: net battery energy, energy balance, solar/grid use, and cost are preserved, and both rate usages decrease. Configuring efficiency losses switches to the binary formulation so charge and discharge remain physically exclusive.
 
 Native CBC warm starts remain available through `solve_energy_schedule(..., use_binary_modes=True)`. A thread-safe history stores up to 32 independently verified solutions for 300 seconds. It matches normalized tariff profiles, capacity and normalized battery state/rates, and directive types/hours/numeric constraints within a 10% similarity threshold. Matching patterns are adapted to current capacity, initial energy, demand, and solar, then independently verified before all continuous and binary initial values are supplied to CBC. Initial values are hints, never fixed decisions. Unsupported starts, corrupt history, infeasible candidates, or failed warm solves fall back to a normal solve. Both solver status and solution status must establish optimality, with zero relative/absolute gaps and no time or node limits. Use `use_warm_start=False` to disable history reuse/storage. Unique temporary files prevent concurrent CBC warm solves from colliding and are cleaned after each attempt.
 
@@ -285,9 +324,41 @@ Malformed or invalid requests return `422` with a detailed field-level error bod
 
 Optimization failures, including infeasible directive combinations, return `422`. Schedule verification failures return `500` with an error detail instead of an hourly plan. `GET /health` checks service availability; it does not establish LLM provider availability.
 
+### `POST /scheduler/actions`
+
+The AI Action Scheduler. Takes the same request body as `POST /optimize-energy`, runs the existing optimizer once, and converts the verified plan into human operating actions. It works strictly on top of the optimized schedule and never changes it. The response is additive and outside the fixed `/optimize-energy` contract.
+
+```jsonc
+{
+  "daily_actions": [
+    {
+      "type": "BATTERY_CHARGE",
+      "start_time": "02:00", "end_time": "06:00",
+      "priority": "HIGH",
+      "reason": "Battery charged during low tariff hours.",
+      "expected_impact": "Reduced evening grid dependency and lower energy cost."
+    }
+  ],
+  "reliability": {
+    "directive_understanding": 100.0,
+    "constraint_validation": 100.0,
+    "optimization_validity": 100.0,
+    "checks_run": 125
+  }
+}
+```
+
+Action types are `BATTERY_CHARGE`, `BATTERY_DISCHARGE`, `SOLAR_PRIORITY`, `GRID_REDUCTION`, and `BATTERY_PROTECTION`. Only meaningful events are emitted: charge windows get `HIGH` priority when their tariff is in the lowest quartile, a discharge is labelled peak shaving only when its tariff is in the top quartile and above the median, one-hour off-peak discharges are skipped, and battery-protection actions are contiguous windows where the battery sits at its reserve. Internal confidence is never returned.
+
+`reliability` is measured, not static: `directive_understanding` is the mean model-agreement score of the interpreted directives (or `null` when unavailable), `constraint_validation` is the share of per-hour physics and directive-compliance checks that hold when the finished plan is replayed, and `optimization_validity` combines the independent verifier, recalculated totals, and the end-of-day battery state. No reasoning text is exposed.
+
+### `POST /optimize-energy/stream`
+
+Same request body and same handler as `POST /optimize-energy`, delivered as newline-delimited JSON so the UI can show real progress. Events are `{"event":"progress","stage":1..5,"state":"running"|"completed"}`, occasional `{"event":"heartbeat"}`, then either `{"event":"result","data":{...}}` (the unchanged `/optimize-energy` response) or `{"event":"error","status":...,"detail":"..."}`. Stages are 1 interpretation, 3 validation, 4 optimization, and 5 verification. Only coarse stage names are relayed, never model output or credentials. Concurrent streams are capped and extra callers get `429`. The dashboard falls back to `POST /optimize-energy` when this endpoint is unavailable.
+
 ### `POST /copilot/chat`
 
-Conversational layer for the dashboard's floating AI Energy Copilot. It performs no optimization, interpretation, or simulation of its own — a deterministic regex-based intent router (not an LLM call, for speed and reproducibility) classifies each message into one of five intents and dispatches to the matching existing GridWise service:
+Conversational layer for the dashboard's floating AI Energy Copilot. It performs no optimization, interpretation, or simulation of its own — a deterministic regex-based intent router (not an LLM call, for speed and reproducibility) classifies each message into one of seven intents and dispatches to the matching existing GridWise service:
 
 | Intent | Backing call |
 | --- | --- |
@@ -295,6 +366,8 @@ Conversational layer for the dashboard's floating AI Energy Copilot. It performs
 | `EXPLANATION_REQUEST` | `app/explainability/generator.py` against the session's last verified result |
 | `SIMULATION_REQUEST` | `app/simulation/simulator.py` (digital twin) |
 | `STATUS_REQUEST` | `GET /system/status` |
+| `SCHEDULE_REQUEST` | The AI Action Scheduler ("What should I do today?") |
+| `APP_HELP_REQUEST` | A fixed guide to using GridWise; requests for prompts, keys, or configuration get a refusal |
 | `GENERAL_ENERGY_QUERY` | Static FAQ answers — no model call |
 
 ```jsonc
@@ -310,7 +383,7 @@ Conversational layer for the dashboard's floating AI Energy Copilot. It performs
 }
 ```
 
-Session memory is in-process, bounded, and TTL-expired (matching the pattern used by the interpretation and optimization caches) — no database, and nothing is persisted across server restarts. `context` may carry the dashboard's current `{scenario_id, hours, battery}` so a follow-up question is answered against the operator's actual scenario rather than a fixed illustrative one. The system prompt documenting the Copilot's contract is never returned to the client; only `{reply, intent, action_taken, visual_data}` cross the API boundary.
+Session memory is in-process, bounded, and TTL-expired (matching the pattern used by the interpretation and optimization caches) — no database, and nothing is persisted across server restarts. `context` may carry the dashboard's current `{scenario_id, hours, battery}` so a follow-up question is answered against the operator's actual scenario rather than a fixed illustrative one. The Copilot never reveals API keys, environment variables, internal prompts, or private configuration. The system prompt documenting its contract is never returned to the client; only `{reply, intent, action_taken, visual_data}` cross the API boundary.
 
 ## Getting Started
 
@@ -372,13 +445,15 @@ Optimizer performance validation: **227 passed, 10 live tests skipped** across w
 python -m pytest -q -p no:cacheprovider
 ```
 
-Latest offline result: **740 passed, 10 live tests skipped**. This includes independent judge checks and fault injection, prompt scoring and recommendation, optimization cache hits, expiry, invalidation and failures, physical validation and safe correction, evaluation scoring and measured default selection, interpretation cache, JSON parsing and repair, confidence policy and API privacy checks, plus 30 public sample API checks: each of the 10 cases runs with original inputs, reordered forecasts, and scaled energy/price values. Tests compare directive semantics, independently replay schedule constraints, recalculate totals, and compare cost with the public optimal objective. Reference hourly schedules are never hardcoded or supplied to the solver.
+Latest offline result: **843 passed, 10 live tests skipped**. This includes independent judge checks and fault injection, prompt scoring and recommendation, optimization cache hits, expiry, invalidation and failures, physical validation and safe correction, evaluation scoring and measured default selection, interpretation cache, JSON parsing and repair, confidence policy and API privacy checks, plus 30 public sample API checks: each of the 10 cases runs with original inputs, reordered forecasts, and scaled energy/price values. Tests compare directive semantics, independently replay schedule constraints, recalculate totals, and compare cost with the public optimal objective. Reference hourly schedules are never hardcoded or supplied to the solver.
 
 To test actual note interpretation using configured providers and credentials in `.env`:
 
 ```bash
 python -m pytest -q -p no:cacheprovider tests/test_public_samples.py -k live_llm --live-llm
 ```
+
+Run the frontend unit tests from `frontend`: `npm test` (Vitest, 21 tests covering impact and carbon math, alert derivation, export, run history, pipeline mapping, and the streaming client including its fallback).
 
 Latest live result: **all 10 public cases passed**, including directive interpretation, schedule validity, and optimal cost. Live runs call external providers and use their quota; offline replay tests do not establish LLM accuracy. See [tests/README.md](backend/tests/README.md) for details.
 
@@ -471,18 +546,31 @@ Demo routes are disabled by default and excluded from OpenAPI. Competition reque
 
 ## Frontend Dashboard
 
-The React operator console (`frontend/`) is a control-room view over the same verified pipeline — it adds no optimization logic of its own; every number it shows traces back to `/optimize-energy`, `/system/status`, or `/copilot/chat`.
+The React AI Energy Operations Control Center (`frontend/`) is a view over the same verified pipeline — it adds no optimization logic of its own; every number it shows traces back to `/optimize-energy`, `/scheduler/actions`, `/system/status`, or `/copilot/chat`. The operator journey is: request, AI understanding, safety validation, optimization, action schedule, explainable recommendation, human execution.
 
 - **System status bar** — three live indicators (LLM system, optimizer, grid simulation) polled from `GET /system/status`.
 - **Operator Command Center** — one-click preset directives (solar maintenance, battery protection, peak demand control) above the full scenario builder.
 - **Public sample pack** — the dashboard loads real cases from `backend/tests/fixtures/sample_cases.json` by default, not synthetic demo data; "Randomize" perturbs a real case rather than generating one from scratch.
-- **AI reasoning timeline** — a step-by-step indicator shown while an optimization is running.
+- **Instruction check** — previews each interpreted constraint, verifies joint feasibility, identifies a minimal conflicting note set, and links back to the original note for correction.
+- **Outage Planner** — evaluates essential-load coverage during a selected grid outage using the active solar and battery configuration.
+- **Midday replanning** — locks completed hours and rebuilds the remaining schedule from a measured battery state without another LLM call.
+- **Flexible equipment** — schedules shiftable tasks inside operator-defined energy, power, and time-window limits.
+- **Battery realism** — supports charge/discharge efficiency and a configurable throughput wear cost while retaining lossless defaults.
+- **CSV profile import** — validates and loads a complete 24-hour demand, solar, and tariff profile into the scenario builder.
+- **Light and dark themes** — a sun/moon toggle in the top bar, remembered locally, with a smooth transition and AA text contrast in both.
+- **Live reasoning timeline and AI Pipeline** — driven by the real stage events from `/optimize-energy/stream`; falls back to a timed indicator if streaming is unavailable.
+- **AI Action Schedule** — a timeline of what to do, when, and why (charge battery, peak shaving, solar priority, reduce grid dependency, maintain reserve), with priority and expected impact. Copy it, download it as CSV, or print it to PDF.
+- **Operator alerts** — what needs attention, derived from the real plan: battery at minimum reserve, peak-tariff windows (escalated when one starts within three hours), curtailed solar, and peak grid import. The Copilot bubble turns amber while warnings exist.
+- **Savings & carbon** — cost saved, grid energy avoided, estimated CO₂ avoided, and solar utilised, compared with buying every kWh from the grid. CO₂ uses an assumed 0.6 kg/kWh factor and is an estimate.
+- **Run history and compare** — the last eight runs are kept in `localStorage`; select any two to compare cost, grid energy, peak load, savings, and CO₂ side by side.
+- **AI Reliability** — directive understanding, constraint validation, and optimization validity as measured by `/scheduler/actions`, with the number of independent checks run.
 - **Results panel** — directive cards with formatted `structured_adjustment` fields (no raw JSON), a grid/solar/battery-action dispatch chart, and a battery state-of-charge chart with a minimum-reserve reference line.
-- **Before vs. after comparison** — runs a second `/optimize-energy` call with directives cleared, on demand (a manual "Compare against baseline" button — it doesn't run automatically, since it doubles LLM + solver cost per click).
-- **"Why AI decided this"** — plan summary, applied-directive explanations, and real battery-usage stats computed from the actual response.
-- **AI agent status panel** — pipeline-stage indicators (interpreter, safety validator, optimizer, explainability) driven by real loading/result/error state, not fabricated.
+- **Constraint Impact Analysis** — on demand, runs a second `/optimize-energy` call with directives cleared. The baseline is the theoretical minimum cost without operational restrictions; GridWise is the lowest-cost feasible plan that respects them, shown as "+X% cost for operational compliance" or "Constraints satisfied ✓". It is a manual button because it doubles LLM and solver cost per click.
+- **"Why AI decided this"** — the constraints the plan satisfies (operator directives, battery safety limits, energy balance), directive, strategy, and safety cards, plus applied-directive explanations and real battery-usage stats computed from the actual response.
+- **AI Energy Orchestrator** — five agent rows (understanding, safety, optimization, reasoning, scheduling) driven by real loading, result, and error state.
 - **Digital Twin tab** — what-if stress-testing (e.g. "what if solar drops by 50%?") run through the real simulator via `/copilot/chat`.
-- **AI Energy Copilot** — a floating chat assistant (bottom-right on every page) that answers questions about the current scenario using the same five intents documented under `POST /copilot/chat` above, with visual response cards instead of raw JSON, a per-session conversation history persisted in `localStorage`, and an unread-message badge.
+- **AI Energy Copilot** — a floating chat assistant (bottom-right on every page) that answers questions about the scenario currently on screen using the seven intents documented under `POST /copilot/chat` above, with quick actions (including Today's Actions and How to use), optional voice dictation through the browser's speech recognition (hidden when unsupported; the transcript lands in the input for review before sending), visual response cards, a per-session conversation history persisted in `localStorage`, and an unread-message badge.
+- **Responsive and accessible** — layouts are checked at phone width (375 px) with no horizontal scroll, 16 px inputs to avoid iOS zoom, and 44 px buttons on phones. axe-core reports no violations in either theme, and text contrast is measured against the rendered backgrounds.
 
 ## Tech Stack
 
@@ -491,11 +579,12 @@ The React operator console (`frontend/`) is a control-room view over the same ve
 - **Optimizer:** PuLP 3.3.0 with bundled CBC solver
 - **Verification:** Independent deterministic schedule replay
 - **Tests:** pytest and FastAPI TestClient, with optional live LLM checks
-- **Frontend:** React 19, TypeScript, Vite 7, Tailwind CSS v4, Framer Motion, Recharts
+- **Frontend:** React 19, TypeScript, Vite 7, Tailwind CSS v4, Framer Motion, Recharts, Vitest
 - **Deployment:** Docker (backend, Render web service) + static site (frontend, Render)
 
 ## Roadmap
 
 1. ~~Deploy and verify the public endpoint.~~ Live on Render — backend is a Docker web service, frontend is a static site built from `frontend/`. See [DEPLOYMENT.md](DEPLOYMENT.md) and [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md).
 2. Run `judge_simulator.py --base-url <deployed backend URL>` against the live deployment to confirm parity with local results.
-3. Code-split the frontend bundle (currently a single ~900 KB chunk) with dynamic imports for the charting and Copilot modules.
+3. ~~Code-split the frontend bundle.~~ Vendor chunks plus lazy-loaded results, Digital Twin tab, and Copilot window cut the entry bundle from ~920 KB to ~160 KB (gzip ~260 KB to ~46 KB). The chart library (~400 KB) still loads in the background with the results panel; splitting the charts out of `ResultsPanel` would defer it until the first result.
+4. Add real-time alert delivery (browser or SMS notifications) for peak-tariff and reserve events.
