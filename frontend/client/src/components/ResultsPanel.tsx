@@ -45,7 +45,7 @@ function DirectiveCard({ item, index }: { item: DirectiveInterpretation; index: 
       <span className="directive-index">NOTE {String(item.note_index + 1).padStart(2, "0")}</span>
       <span className={`applies-badge ${item.applies ? "applies-yes" : "applies-no"}`}><span className="status-dot" />{item.applies ? "Applied" : "Not applied"}</span>
     </div>
-    <div className="directive-title-row"><h4>{(item.directive_type || "Unclassified directive").replaceAll("_", " ")}</h4><Activity size={15} /></div>
+    <div className="directive-title-row"><h3>{(item.directive_type || "Unclassified directive").replaceAll("_", " ")}</h3><Activity size={15} /></div>
     <p>{item.explanation || "No explanation returned for this directive."}</p>
     {item.structured_adjustment && Object.keys(item.structured_adjustment).length > 0 && (
       <dl className="adjustment-facts">

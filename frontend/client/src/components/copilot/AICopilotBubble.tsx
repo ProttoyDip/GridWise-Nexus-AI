@@ -17,7 +17,7 @@ export default function AICopilotBubble({ status, unreadCount, isOpen, onClick }
   const alerting = alertCount > 0 && status === "idle" && !isOpen;
 
   return (
-    <div className={`fixed bottom-5 right-5 z-[60] flex flex-col items-end gap-2 ${isOpen ? "max-sm:hidden" : ""}`}>
+    <aside aria-label="GridWise AI Copilot" className={`fixed bottom-5 right-5 z-[60] flex flex-col items-end gap-2 ${isOpen ? "max-sm:hidden" : ""}`}>
       <AnimatePresence>
         {showTooltip && !isOpen && (
           <motion.div
@@ -93,6 +93,6 @@ export default function AICopilotBubble({ status, unreadCount, isOpen, onClick }
       </motion.button>
 
       <span className="pr-1 text-[10px] font-medium tracking-wide text-slate-500">GridWise AI</span>
-    </div>
+    </aside>
   );
 }

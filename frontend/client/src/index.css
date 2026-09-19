@@ -148,7 +148,7 @@ h2 { margin: 6px 0 5px; color: #edf0fa; font-size: 18px; letter-spacing: -.035em
 .applies-yes { color: #72dbbd; background: rgba(85, 230, 188, .08); }
 .applies-no { color: #ffad8f; background: rgba(255, 156, 110, .07); }
 .directive-title-row { justify-content: space-between; margin-top: 11px; color: #8493bb; }
-.directive-title-row h4 { margin: 0; color: #e0e6f4; font-size: 13px; font-weight: 700; }
+.directive-title-row h3 { margin: 0; color: #e0e6f4; font-size: 13px; font-weight: 700; }
 .directive-card p { margin: 7px 0 10px; color: #8793aa; font-size: 11px; line-height: 1.55; }
 .directive-card pre { max-height: 102px; overflow: auto; margin: 0; padding: 9px; color: #a4b4ed; border: 1px solid rgba(121, 137, 183, .1); border-radius: 7px; background: rgba(5, 9, 17, .5); font: 10px/1.5 "DM Mono", monospace; }
 .empty-result { min-height: 185px; display: flex; align-items: center; flex-direction: column; justify-content: center; padding: 20px 40px; text-align: center; }

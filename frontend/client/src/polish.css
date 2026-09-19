@@ -95,7 +95,7 @@ html[data-theme="light"] .glass-card { border-color: rgba(30, 50, 100, .12); bac
 html[data-theme="light"] .glass-card:hover { border-color: rgba(60, 90, 220, .28); box-shadow: 0 18px 50px rgba(30, 50, 100, .12); }
 html[data-theme="light"] .glass-card::before { background: linear-gradient(90deg, transparent, rgba(60, 90, 220, .3), transparent); }
 html[data-theme="light"] h1, html[data-theme="light"] h2, html[data-theme="light"] .panel-heading h2, html[data-theme="light"] .brand-name,
-html[data-theme="light"] .directive-title-row h4, html[data-theme="light"] .stat-card strong, html[data-theme="light"] .comparison-col strong,
+html[data-theme="light"] .directive-title-row h3, html[data-theme="light"] .stat-card strong, html[data-theme="light"] .comparison-col strong,
 html[data-theme="light"] .timeline-body strong, html[data-theme="light"] .meter-top strong, html[data-theme="light"] .why-card strong,
 html[data-theme="light"] .empty-result h3, html[data-theme="light"] .submit-context strong, html[data-theme="light"] .twin-outcome strong,
 html[data-theme="light"] .status-indicator-label, html[data-theme="light"] .hero-health strong { color: #0f1b30; }
@@ -265,3 +265,29 @@ html[data-theme="light"] .impact-tile strong { color: #0f1b30; }
 html[data-theme="light"] .impact-tile small { color: #5b6b88; }
 @media (max-width: 820px) { .impact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 380px) { .impact-grid { grid-template-columns: 1fr; } }
+
+/* ---------- Contrast hardening (WCAG AA, measured against rendered backgrounds) ---------- */
+:root { --muted: #97a3bd; --muted-strong: #b4bfd8; }
+.stat-meta, .limit-count, .input-prefix, .input-suffix, .brand-subtitle, .panel-heading p, .hours-table th, .hours-table th small,
+.directive-index, .stat-label, .footer, .table-badge, .stat-card strong small, .api-endpoint, .hero-health span, .hero-health small,
+.status-indicator-copy small, .submit-context small, .plan-table-header, .plan-strip-item, .section-divider, .field-label, .empty-result p,
+.adjustment-fact dt, .agent-state, .history-main small, .history-meta small, .compare-head, .why-card .stat-label { color: var(--muted); }
+.button-quiet, .button-add-note, .hero-kicker, .eyebrow, .pipeline li, .result-count, .note-index { color: var(--muted-strong); }
+.button-add-note:hover, .button-quiet:hover { color: #e6ebff; }
+
+html[data-theme="light"] { --muted: #52627f; --muted-strong: #3f4f6d; }
+html[data-theme="light"] .why-list li strong { color: #142033; }
+html[data-theme="light"] .live-tag, html[data-theme="light"] .applies-yes { color: #0a6a50; }
+html[data-theme="light"] .applies-no { color: #a03a15; }
+html[data-theme="light"] .priority { color: #52627f; }
+html[data-theme="light"] .priority-high { color: #a03a15; }
+html[data-theme="light"] .priority-medium { color: #3346b8; }
+html[data-theme="light"] .note-index { color: #3346b8; }
+html[data-theme="light"] .tooltip-row, html[data-theme="light"] .tooltip-row span { color: #3f4f6d; }
+html[data-theme="light"] .connection-pill.connected { color: #0a6a50; }
+html[data-theme="light"] .hero-kicker, html[data-theme="light"] .brand-subtitle { color: #3f4f6d; }
+html[data-theme="light"] .button-quiet, html[data-theme="light"] .button-add-note { color: #24365a; }
+html[data-theme="light"] .adjustment-fact dt { color: #52627f; }
+.chart-legend { color: var(--muted); }
+html[data-theme="light"] .submit-context small { color: #3f4f6d; }
+html[data-theme="light"] .chart-legend { color: #3f4f6d; }
