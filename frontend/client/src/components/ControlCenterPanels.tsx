@@ -3,7 +3,19 @@ import type { Reliability } from "@/types";
 
 const STEPS = ["Operator Request", "AI Understanding", "Directive Validation", "Optimization", "Schedule Generation", "Human Recommendation"];
 
-export function PipelineFlow({ complete, running }: { complete: boolean; running: boolean }) {
+export type StepState = "done" | "running" | "idle";
+
+/** Maps real backend stage events (1 interpret, 3 validate, 4 optimize, 5 verify) onto the six visible steps. */
+export function pipelineStates(stages: Record<number, string>, ctx: { loading: boolean; hasResult: boolean; scheduled: boolean }): StepState[] {
+  const started = ctx.loading || ctx.hasResult;
+  const streamed = Object.keys(stages).length > 0;
+  const done = (stage: number) => (streamed ? stages[stage] === "completed" : ctx.hasResult);
+  const flags = [started, done(1), done(3), done(4), ctx.hasResult && ctx.scheduled && done(5), ctx.hasResult && ctx.scheduled];
+  const firstPending = flags.indexOf(false);
+  return flags.map((flag, index) => (flag ? "done" : ctx.loading && index === firstPending ? "running" : "idle"));
+}
+
+export function PipelineFlow({ states }: { states: StepState[] }) {
   return (
     <section className="glass-card pipeline-panel">
       <div className="panel-heading compact-heading">
@@ -11,8 +23,8 @@ export function PipelineFlow({ complete, running }: { complete: boolean; running
       </div>
       <ol className="pipeline">
         {STEPS.map((step, index) => (
-          <li key={step} className={complete ? "is-done" : running ? "is-running" : ""}>
-            <span className="pipeline-node">{complete ? <CheckCircle2 size={14} /> : index + 1}</span>
+          <li key={step} className={states[index] === "done" ? "is-done" : states[index] === "running" ? "is-running" : ""}>
+            <span className="pipeline-node">{states[index] === "done" ? <CheckCircle2 size={14} /> : index + 1}</span>
             <span className="pipeline-label">{step}</span>
           </li>
         ))}

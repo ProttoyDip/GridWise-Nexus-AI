@@ -110,3 +110,34 @@ def test_reliability_detects_a_tampered_plan():
     rel = compute_reliability(scenario, bad)
     assert rel["constraint_validation"] < 100.0
     assert rel["optimization_validity"] < 100.0
+
+
+def test_optimize_stream_emits_progress_then_result():
+    import json
+
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    body = {
+        "scenario_id": "STREAM-1",
+        "operator_notes": ["No special operating conditions today"],
+        "hours": _hours(),
+        "battery": {"capacity_kwh": 200, "initial_energy_kwh": 100, "minimum_energy_kwh": 30,
+                    "max_charge_kwh_per_hour": 50, "max_discharge_kwh_per_hour": 50},
+    }
+    res = TestClient(app).post("/optimize-energy/stream", json=body)
+    events = [json.loads(line) for line in res.text.splitlines() if line.strip()]
+    kinds = [e["event"] for e in events]
+    assert kinds[-1] == "result" and "progress" in kinds
+    assert {e["stage"] for e in events if e["event"] == "progress"} >= {1, 3, 4, 5}
+    assert len(events[-1]["data"]["hourly_plan"]) == 24
+    assert "prompt" not in res.text.lower() and "api_key" not in res.text.lower()
+
+
+def test_optimize_stream_reports_invalid_request_like_the_plain_endpoint():
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    assert TestClient(app).post("/optimize-energy/stream", json={"scenario_id": "x"}).status_code == 422

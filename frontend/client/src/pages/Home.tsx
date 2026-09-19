@@ -2,9 +2,10 @@ import { motion } from "framer-motion";
 import { AlertTriangle, ArrowRight, Clock3, Cpu, LayoutDashboard, Loader2, Moon, Play, RadarIcon, RefreshCw, ShieldCheck, Sparkles, Sun, Terminal, Zap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ActionSchedule, useSchedulerInsights } from "@/components/ActionSchedule";
-import { PipelineFlow, ReliabilityPanel } from "@/components/ControlCenterPanels";
+import { PipelineFlow, ReliabilityPanel, pipelineStates } from "@/components/ControlCenterPanels";
 import { AgentStatusPanel } from "@/components/AgentStatusPanel";
 import { BeforeAfterComparison } from "@/components/BeforeAfterComparison";
+import { optimizeWithProgress, type StageMap } from "@/lib/optimizeStream";
 import { ImpactSummary } from "@/components/ImpactSummary";
 import { RunHistory } from "@/components/RunHistory";
 import { addRun, loadRuns, makeRun, saveRuns, type RunRecord } from "@/lib/history";
@@ -73,6 +74,7 @@ export default function Home() {
   const [health, setHealth] = useState<"checking" | "connected" | "disconnected">("checking");
   const [lastHealthCheck, setLastHealthCheck] = useState<Date | null>(null);
   const [activeTab, setActiveTab] = useState<"dashboard" | "twin">("dashboard");
+  const [stages, setStages] = useState<StageMap>({});
   const [runs, setRuns] = useState<RunRecord[]>(() => loadRuns());
   const insights = useSchedulerInsights(API_BASE, scenario, result);
   const [theme, setTheme] = useState<"dark" | "light">(() => {
@@ -136,19 +138,9 @@ export default function Home() {
   const handleSubmit = async () => {
     setLoading(true);
     setError(null);
+    setStages({});
     try {
-      const response = await fetch(`${API_BASE}/optimize-energy`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(scenario),
-      });
-      const raw = await response.text();
-      let payload: unknown = null;
-      try { payload = raw ? JSON.parse(raw) : null; } catch { throw new Error("The API returned malformed JSON."); }
-      if (!response.ok) {
-        const detail = payload && typeof payload === "object" && "detail" in payload ? String((payload as { detail: unknown }).detail) : `Request failed with status ${response.status}.`;
-        throw new Error(detail);
-      }
+      const payload = await optimizeWithProgress(API_BASE, scenario, (stage, state) => setStages((current) => ({ ...current, [stage]: state })));
       if (!isOptimizeResponse(payload)) throw new Error("The API response is missing a directive interpretation or hourly plan.");
       setResult(payload);
       setRuns((current) => { const next = addRun(current, makeRun(scenario, payload)); saveRuns(next); return next; });
@@ -199,12 +191,13 @@ export default function Home() {
             </div>
           </section>
 
-          {loading && <div className="glass-card reasoning-panel"><div className="eyebrow"><span className="eyebrow-dot" /> AI reasoning</div><ReasoningTimeline active={loading} /></div>}
+          {loading && <div className="glass-card reasoning-panel"><div className="eyebrow"><span className="eyebrow-dot" /> AI reasoning</div><ReasoningTimeline active={loading} stages={stages} /></div>}
 
           <div className="workspace-grid">
             <div className="builder-column"><ScenarioBuilder scenario={scenario} onChange={setScenario} onRandomize={() => { setScenario(randomizedFromPack()); setResult(null); setError(null); }} onLoadJson={loadJson} onLoadSampleCase={loadSampleCase} sampleJson={sampleJson} /></div>
             <div className="results-column"><ResultsPanel result={result} loading={loading} battery={scenario.battery} /></div>
           </div>
+
 
           <div className="submit-bar glass-card"><div className="submit-context"><div className="submit-icon"><ShieldCheck size={18} /></div><div><strong>Ready to run <span>{scenario.scenario_id}</span></strong><small>POST /optimize-energy · {scenario.hours.length} hourly intervals · {scenario.operator_notes.length} operator directives</small></div></div><button className="button button-primary submit-button" type="button" onClick={handleSubmit} disabled={loading}>{loading ? <><Loader2 size={17} className="spin" /> Optimizing…</> : <><Play size={15} fill="currentColor" /> Run optimization <ArrowRight size={16} /></>}</button></div>
 
@@ -223,7 +216,7 @@ export default function Home() {
               </div>
               <div className="insight-col">
                 <AgentStatusPanel loading={loading} hasResult={Boolean(result)} hasError={Boolean(error)} />
-                <PipelineFlow complete={Boolean(result) && !error} running={loading} />
+                <PipelineFlow states={pipelineStates(stages, { loading, hasResult: Boolean(result) && !error, scheduled: insights.actions !== null })} />
                 <ReliabilityPanel reliability={insights.reliability} />
               </div>
             </div>
