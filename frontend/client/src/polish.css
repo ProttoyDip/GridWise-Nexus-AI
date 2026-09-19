@@ -232,3 +232,19 @@ html[data-theme="light"] ::selection { color: #fff; background: #3b52e0; }
 @media (max-width: 560px) { .json-loader-wrap .button { justify-content: center; } }
 .meter-note { margin: 14px 0 0; color: #74819d; font: 10px "DM Mono", monospace; }
 html[data-theme="light"] .meter-note { color: #5b6b88; }
+
+/* ---------- Export + print ---------- */
+.export-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+@media (max-width: 560px) { .export-row .button { flex: 1; } }
+@media print {
+  html.print-actions, html.print-actions body, html.print-actions .app-shell { background: #fff !important; overflow: visible; }
+  html.print-actions #root > *:not(.app-shell), html.print-actions .topbar, html.print-actions .ambient, html.print-actions .footer,
+  html.print-actions .main-content > *:not(.insight-grid), html.print-actions .insight-grid > *:not(.insight-col:first-child),
+  html.print-actions .insight-col:first-child > *:not(.action-panel), html.print-actions .action-panel [data-print-hide] { display: none !important; }
+  html.print-actions .app-shell::before { display: none; }
+  html.print-actions .main-content, html.print-actions .insight-grid { display: block; width: 100%; padding: 0; margin: 0; }
+  html.print-actions .action-panel { margin: 0; padding: 0; background: #fff !important; border: 0; box-shadow: none; backdrop-filter: none; }
+  html.print-actions .action-panel * { color: #111 !important; animation: none !important; opacity: 1 !important; transform: none !important; }
+  html.print-actions .timeline-body { background: #fff; border-color: #bbb; break-inside: avoid; }
+  html.print-actions .timeline::before { display: none; }
+}

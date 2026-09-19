@@ -208,7 +208,7 @@ export default function Home() {
           {result && !loading && (
             <div className="insight-grid">
               <div className="insight-col">
-                <ActionSchedule actions={insights.actions} failed={insights.failed} />
+                <ActionSchedule actions={insights.actions} failed={insights.failed} scenarioId={scenario.scenario_id} />
                 <BeforeAfterComparison apiBase={API_BASE} scenario={scenario} result={result} />
                 <WhyAIDecided result={result} />
               </div>

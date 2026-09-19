@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
-import { BatteryCharging, BatteryWarning, CalendarClock, ShieldCheck, Sun, TrendingDown, Zap } from "lucide-react";
+import { BatteryCharging, BatteryWarning, CalendarClock, Check, Copy, Download, Printer, ShieldCheck, Sun, TrendingDown, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
+import { actionsToCsv, actionsToText, downloadFile } from "@/lib/exportPlan";
 import type { Reliability, Scenario, ScheduledAction } from "@/types";
 
 const META: Record<string, { label: string; icon: React.ReactNode; tone: string }> = {
@@ -37,13 +38,37 @@ export function useSchedulerInsights(apiBase: string, scenario: Scenario, refres
   return { actions, reliability, failed };
 }
 
-export function ActionSchedule({ actions, failed }: { actions: ScheduledAction[] | null; failed: boolean }) {
+export function ActionSchedule({ actions, failed, scenarioId }: { actions: ScheduledAction[] | null; failed: boolean; scenarioId: string }) {
+  const [copied, setCopied] = useState(false);
+  const canExport = Boolean(actions && actions.length > 0);
+
+  const copyPlan = async () => {
+    if (!actions) return;
+    try {
+      await navigator.clipboard.writeText(actionsToText(scenarioId, actions));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch { /* clipboard blocked */ }
+  };
+  const printPlan = () => {
+    const root = document.documentElement;
+    root.classList.add("print-actions");
+    window.addEventListener("afterprint", () => root.classList.remove("print-actions"), { once: true });
+    window.print();
+  };
   return (
     <section className="glass-card action-panel" id="action-schedule">
       <div className="panel-heading compact-heading">
         <div><div className="eyebrow"><span className="eyebrow-dot mint" /> Operator playbook</div><h2>AI Action Schedule</h2><p>What to do, when, and why.</p></div>
         {actions && <span className="result-count">{actions.length} actions</span>}
       </div>
+      {canExport && (
+        <div className="export-row" data-print-hide>
+          <button type="button" className="button button-quiet" onClick={copyPlan}>{copied ? <Check size={14} /> : <Copy size={14} />} {copied ? "Copied" : "Copy"}</button>
+          <button type="button" className="button button-quiet" onClick={() => actions && downloadFile(`gridwise-actions-${scenarioId}.csv`, actionsToCsv(actions), "text/csv")}><Download size={14} /> CSV</button>
+          <button type="button" className="button button-quiet" onClick={printPlan}><Printer size={14} /> Print / PDF</button>
+        </div>
+      )}
       {failed && <div className="plan-empty"><BatteryWarning size={15} /> Couldn't build the action schedule. Try running the optimization again.</div>}
       {!failed && actions === null && <div className="loading-stack"><div className="loading-bar" /><div className="loading-bar" /></div>}
       {actions && actions.length === 0 && <div className="plan-empty"><CalendarClock size={15} /> No special actions needed. The plan runs on autopilot.</div>}
