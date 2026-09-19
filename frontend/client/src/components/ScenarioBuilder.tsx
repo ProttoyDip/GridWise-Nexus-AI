@@ -1,7 +1,4 @@
-import { AnimatePresence, motion } from "framer-motion";
 import {
-  Braces,
-  ChevronDown,
   Copy,
   FileJson,
   Library,
@@ -15,6 +12,7 @@ import {
 import { useRef, useState } from "react";
 import type { BatteryConfig, FlexibleLoad, Scenario } from "@/types";
 import samplePack from "@/data/sampleCases.json";
+import { JsonLoaderDialog } from "@/components/JsonLoaderDialog";
 import { parseHourlyCsv } from "@/lib/csvScenario";
 
 type SamplePackCase = { id: string; label: string; input: Scenario };
@@ -24,7 +22,7 @@ type ScenarioBuilderProps = {
   scenario: Scenario;
   onChange: (next: Scenario) => void;
   onRandomize: () => void;
-  onLoadJson: (value: string) => void;
+  onLoadJson: (value: string) => string | null;
   onLoadSampleCase: (caseId: string) => void;
   sampleJson: string;
 };
@@ -60,6 +58,7 @@ export function ScenarioBuilder({
 }: ScenarioBuilderProps) {
   const [sampleOpen, setSampleOpen] = useState(false);
   const [jsonValue, setJsonValue] = useState(sampleJson);
+  const [jsonError, setJsonError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [csvStatus, setCsvStatus] = useState<{ ok: boolean; message: string } | null>(null);
   const csvInput = useRef<HTMLInputElement>(null);
@@ -205,32 +204,21 @@ export function ScenarioBuilder({
           </div>
         </label>
         <div className="json-loader-wrap">
-          <button
-            className={`button button-outline ${sampleOpen ? "is-active" : ""}`}
-            type="button"
-            onClick={() => setSampleOpen((open) => !open)}
-          >
-            <FileJson size={16} /> Load sample case <ChevronDown size={15} className={sampleOpen ? "rotate-180" : ""} />
+          <button className="button button-outline" type="button" onClick={() => setSampleOpen(true)}>
+            <FileJson size={16} /> Paste JSON
           </button>
-          <AnimatePresence initial={false}>
-            {sampleOpen && (
-              <motion.div
-                className="json-loader"
-                initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -8, scale: 0.98 }}
-              >
-                <div className="json-loader-topline">
-                  <span><Braces size={14} /> Paste a scenario object</span>
-                  <button type="button" className="icon-button" onClick={() => setSampleOpen(false)} aria-label="Close JSON loader"><X size={15} /></button>
-                </div>
-                <textarea value={jsonValue} onChange={(event) => setJsonValue(event.target.value)} spellCheck={false} />
-                <button type="button" className="button button-primary button-full" onClick={() => { onLoadJson(jsonValue); setSampleOpen(false); }}>
-                  <Upload size={15} /> Apply to builder
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <JsonLoaderDialog
+            open={sampleOpen}
+            value={jsonValue}
+            onChange={setJsonValue}
+            error={jsonError}
+            onApply={() => {
+              const message = onLoadJson(jsonValue);
+              setJsonError(message);
+              if (!message) setSampleOpen(false);
+            }}
+            onClose={() => { setSampleOpen(false); setJsonError(null); }}
+          />
         </div>
       </div>
 

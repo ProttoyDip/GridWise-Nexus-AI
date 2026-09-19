@@ -69,3 +69,27 @@ html[data-theme="light"] .hours-table thead th { background: #eaf0fb; }
 .tab-badge { display: inline-grid; min-width: 18px; height: 18px; place-items: center; padding: 0 5px; color: #2a1200; border-radius: 99px; background: #ffb86b; font: 800 10px "DM Mono", monospace; }
 .tab-button.is-active .tab-badge { background: #0b1020; color: #ffb86b; }
 .builder-column > * + * { margin-top: 16px; }
+
+/* Paste-JSON dialog: centered on desktop, bottom sheet on phones. Portalled, so cards can't offset it. */
+.modal-backdrop { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 24px; background: rgba(4, 7, 14, .68); backdrop-filter: blur(6px); }
+.json-dialog { display: flex; flex-direction: column; gap: 14px; width: min(640px, 100%); max-height: calc(100dvh - 48px); padding: 20px 22px 18px; border: 1px solid rgba(136, 150, 212, .28); border-radius: 18px; background: linear-gradient(160deg, rgba(120, 140, 255, .08), transparent 40%), #131a2d; box-shadow: 0 30px 90px rgba(0, 0, 0, .55); }
+.json-dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.json-dialog-head h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 17px; }
+.json-dialog-head p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.json-dialog textarea { display: block; width: 100%; height: min(46dvh, 340px); min-height: 160px; padding: 12px; resize: vertical; border: 1px solid rgba(121, 137, 183, .22); border-radius: 10px; outline: 0; color: #b8c6ff; background: #0b101c; font: 11px/1.6 "DM Mono", monospace; }
+.json-dialog textarea:focus { border-color: rgba(137, 153, 255, .7); box-shadow: 0 0 0 3px rgba(116, 133, 255, .1); }
+.json-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.json-dialog-actions .button { min-height: 40px; padding: 0 16px; }
+html[data-theme="light"] .modal-backdrop { background: rgba(20, 32, 60, .38); }
+html[data-theme="light"] .json-dialog { background: #fff; border-color: rgba(30, 50, 100, .2); box-shadow: 0 30px 90px rgba(30, 50, 100, .28); }
+html[data-theme="light"] .json-dialog textarea { color: #2b3f8f; background: #f1f4fc; border-color: rgba(30, 50, 100, .18); }
+@media (max-width: 560px) {
+  .modal-backdrop { place-items: end center; padding: 0; }
+  .json-dialog { width: 100%; max-height: 92dvh; padding: 18px 16px calc(16px + env(safe-area-inset-bottom)); border-bottom: 0; border-radius: 18px 18px 0 0; }
+  .json-dialog textarea { height: 42dvh; font-size: 16px; }
+  .json-dialog-actions { flex-direction: column-reverse; }
+  .json-dialog-actions .button { width: 100%; min-height: 46px; }
+}
+.json-dialog-error { margin: 0; padding: 9px 12px; color: #ffb59a; border: 1px solid rgba(255, 156, 110, .35); border-radius: 9px; background: rgba(255, 156, 110, .08); font-size: 12px; line-height: 1.5; }
+.json-dialog textarea[aria-invalid="true"] { border-color: rgba(255, 156, 110, .6); }
+html[data-theme="light"] .json-dialog-error { color: #a03a15; background: rgba(230, 100, 50, .08); }

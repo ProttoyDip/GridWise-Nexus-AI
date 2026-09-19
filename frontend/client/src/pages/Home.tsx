@@ -150,15 +150,17 @@ export default function Home() {
     setError(null);
   };
 
-  const loadJson = (value: string) => {
+  // Returns null on success, or a message for the paste dialog to show inline.
+  const loadJson = (value: string): string | null => {
     try {
       const parsed: unknown = JSON.parse(value);
       if (!isScenario(parsed)) throw new Error("Expected 24 hourly rows, 1–3 operator notes, and a complete battery object.");
       setScenario(parsed);
       setResult(null);
       setError(null);
+      return null;
     } catch (reason) {
-      setError(`Could not load scenario JSON: ${reason instanceof Error ? reason.message : "invalid JSON"}`);
+      return `Could not load scenario JSON: ${reason instanceof Error ? reason.message : "invalid JSON"}`;
     }
   };
 
